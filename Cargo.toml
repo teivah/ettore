@@ -1,0 +1,10 @@
+[package]
+name = "vega"
+version = "0.1.0"
+authors = ["teivah"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2"
