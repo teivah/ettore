@@ -15,19 +15,22 @@ impl Runner {
     }
 
     fn run(&mut self) -> Result<(), String> {
+        let mut address: i32 = 0;
         for instruction in &self.instructions {
             let runner = Runner::get_runner(&instruction.instruction_type);
-            runner(&mut self.ctx, instruction)?;
+            runner(&mut self.ctx, instruction, address)?;
+            address += 4;
         }
         return Ok(());
     }
 
     fn get_runner(
         instruction_type: &InstructionType,
-    ) -> fn(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
+    ) -> fn(ctx: &mut Context, instruction: &Instruction, addr: i32) -> Result<(), String> {
         return match instruction_type {
             InstructionType::ADDI => addi,
             InstructionType::ANDI => andi,
+            InstructionType::AUIPC => auipc,
             InstructionType::LUI => lui,
             InstructionType::ORI => ori,
             InstructionType::SLLI => slli,
@@ -51,54 +54,62 @@ impl Context {
     }
 }
 
-fn addi(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i3)?;
-    let rd = ensure_register(&instruction.i1)?;
-    let rs = ensure_register(&instruction.i2)?;
+fn addi(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i3)?;
+    let rd = register(&instruction.i1)?;
+    let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] + imm;
     return Ok(());
 }
 
-fn andi(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i3)?;
-    let rd = ensure_register(&instruction.i1)?;
-    let rs = ensure_register(&instruction.i2)?;
+fn andi(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i3)?;
+    let rd = register(&instruction.i1)?;
+    let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] & imm;
     return Ok(());
 }
 
-fn lui(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i2)?;
-    let rd = ensure_register(&instruction.i1)?;
+fn auipc(ctx: &mut Context, instruction: &Instruction, address: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i2)?;
+    let rd = register(&instruction.i1)?;
+
+    ctx.registers[*rd] = address + (imm << 12);
+    return Ok(());
+}
+
+fn lui(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i2)?;
+    let rd = register(&instruction.i1)?;
 
     ctx.registers[*rd] = imm << 12;
     return Ok(());
 }
 
-fn ori(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i3)?;
-    let rd = ensure_register(&instruction.i1)?;
-    let rs = ensure_register(&instruction.i2)?;
+fn ori(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i3)?;
+    let rd = register(&instruction.i1)?;
+    let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] | imm;
     return Ok(());
 }
 
-fn slli(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i3)?;
-    let rd = ensure_register(&instruction.i1)?;
-    let rs = ensure_register(&instruction.i2)?;
+fn slli(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i3)?;
+    let rd = register(&instruction.i1)?;
+    let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] << imm;
     return Ok(());
 }
 
-fn slti(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i3)?;
-    let rd = ensure_register(&instruction.i1)?;
-    let rs = ensure_register(&instruction.i2)?;
+fn slti(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i3)?;
+    let rd = register(&instruction.i1)?;
+    let rs = register(&instruction.i2)?;
 
     if ctx.registers[*rs] < imm {
         ctx.registers[*rd] = 1
@@ -108,32 +119,32 @@ fn slti(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
     return Ok(());
 }
 
-fn srli(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i3)?;
-    let rd = ensure_register(&instruction.i1)?;
-    let rs = ensure_register(&instruction.i2)?;
+fn srli(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i3)?;
+    let rd = register(&instruction.i1)?;
+    let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] >> imm;
     return Ok(());
 }
 
-fn xori(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
-    let imm = ensure_i32(&instruction.i3)?;
-    let rd = ensure_register(&instruction.i1)?;
-    let rs = ensure_register(&instruction.i2)?;
+fn xori(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let imm = i32(&instruction.i3)?;
+    let rd = register(&instruction.i1)?;
+    let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] ^ imm;
     return Ok(());
 }
 
-fn ensure_register(e: &Either<RegisterType, String>) -> Result<&RegisterType, String> {
+fn register(e: &Either<RegisterType, String>) -> Result<&RegisterType, String> {
     return match e {
         Left(r) => return Ok(r),
         Right(_) => Err("not register type".to_string()),
     };
 }
 
-fn ensure_i32(e: &Either<RegisterType, String>) -> Result<i32, String> {
+fn i32(e: &Either<RegisterType, String>) -> Result<i32, String> {
     return match e {
         Right(s) => match s.parse::<i32>() {
             Ok(n) => Ok(n),
@@ -155,6 +166,7 @@ pub struct Instruction {
 pub enum InstructionType {
     ADDI,
     ANDI,
+    AUIPC,
     LUI,
     ORI,
     SLLI,
@@ -240,9 +252,61 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("1".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 2);
+    }
+
+    #[test]
+    fn test_auipc() {
+        let mut instructions = vec![
+            Instruction {
+                instruction_type: InstructionType::AUIPC,
+                i1: Left(RegisterType::T0),
+                i2: Right("0".to_string()),
+                i3: Right("".to_string()),
+            },
+            Instruction {
+                instruction_type: InstructionType::AUIPC,
+                i1: Left(RegisterType::T0),
+                i2: Right("0".to_string()),
+                i3: Right("".to_string()),
+            },
+            Instruction {
+                instruction_type: InstructionType::AUIPC,
+                i1: Left(RegisterType::T0),
+                i2: Right("0".to_string()),
+                i3: Right("".to_string()),
+            },
+        ];
+        let mut runner = Runner::new(instructions);
+        runner.run().unwrap();
+        assert_eq!(runner.ctx.registers[RegisterType::T0], 8);
+
+        instructions = vec![
+            Instruction {
+                instruction_type: InstructionType::AUIPC,
+                i1: Left(RegisterType::T0),
+                i2: Right("1".to_string()),
+                i3: Right("".to_string()),
+            },
+            Instruction {
+                instruction_type: InstructionType::AUIPC,
+                i1: Left(RegisterType::T0),
+                i2: Right("1".to_string()),
+                i3: Right("".to_string()),
+            },
+            Instruction {
+                instruction_type: InstructionType::AUIPC,
+                i1: Left(RegisterType::T0),
+                i2: Right("1".to_string()),
+                i3: Right("".to_string()),
+            },
+        ];
+        runner = Runner::new(instructions);
+        runner.run().unwrap();
+        assert_eq!(runner.ctx.registers[RegisterType::T0], 4104);
     }
 
     #[test]
@@ -259,6 +323,7 @@ mod tests {
                 i2: Right("0".to_string()),
                 i3: Right("".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 0);
@@ -271,6 +336,7 @@ mod tests {
                 i2: Right("1".to_string()),
                 i3: Right("".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4096);
@@ -283,6 +349,7 @@ mod tests {
                 i2: Right("3".to_string()),
                 i3: Right("".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 12288);
@@ -303,6 +370,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("2".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
@@ -323,6 +391,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("2".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
@@ -343,6 +412,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("5".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -363,6 +433,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("1".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -383,6 +454,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("2".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -403,6 +475,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("4".to_string()),
             },
+            0,
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 7);
