@@ -15,9 +15,11 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
         let instruction_type = match instruction_type_string {
             "add" => InstructionType::ADD,
             "addi" => InstructionType::ADDI,
+            "and" => InstructionType::AND,
             "andi" => InstructionType::ANDI,
             "auipc" => InstructionType::AUIPC,
             "lui" => InstructionType::LUI,
+            "or" => InstructionType::OR,
             "ori" => InstructionType::ORI,
             "slli" => InstructionType::SLLI,
             "slt" => InstructionType::SLT,
@@ -25,6 +27,7 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
             "sltu" => InstructionType::SLTU,
             "srai" => InstructionType::SRAI,
             "sub" => InstructionType::SUB,
+            "xor" => InstructionType::XOR,
             "xori" => InstructionType::XORI,
             _ => {
                 return Err(

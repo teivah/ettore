@@ -30,9 +30,11 @@ impl Runner {
         return match instruction_type {
             InstructionType::ADD => add,
             InstructionType::ADDI => addi,
+            InstructionType::AND => and,
             InstructionType::ANDI => andi,
             InstructionType::AUIPC => auipc,
             InstructionType::LUI => lui,
+            InstructionType::OR => or,
             InstructionType::ORI => ori,
             InstructionType::SLLI => slli,
             InstructionType::SLT => slt,
@@ -41,6 +43,7 @@ impl Runner {
             InstructionType::SRAI => srli,
             InstructionType::SRLI => srli,
             InstructionType::SUB => sub,
+            InstructionType::XOR => xor,
             InstructionType::XORI => xori,
         };
     }
@@ -76,6 +79,15 @@ fn addi(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Stri
     return Ok(());
 }
 
+fn and(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let rd = register(&instruction.i1)?;
+    let rs1 = register(&instruction.i2)?;
+    let rs2 = register(&instruction.i3)?;
+
+    ctx.registers[*rd] = ctx.registers[*rs1] & ctx.registers[*rs2];
+    return Ok(());
+}
+
 fn andi(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
@@ -98,6 +110,15 @@ fn lui(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Strin
     let rd = register(&instruction.i1)?;
 
     ctx.registers[*rd] = imm << 12;
+    return Ok(());
+}
+
+fn or(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let rd = register(&instruction.i1)?;
+    let rs1 = register(&instruction.i2)?;
+    let rs2 = register(&instruction.i3)?;
+
+    ctx.registers[*rd] = ctx.registers[*rs1] | ctx.registers[*rs2];
     return Ok(());
 }
 
@@ -163,6 +184,15 @@ fn sub(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Strin
     return Ok(());
 }
 
+fn xor(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let rd = register(&instruction.i1)?;
+    let rs1 = register(&instruction.i2)?;
+    let rs2 = register(&instruction.i3)?;
+
+    ctx.registers[*rd] = ctx.registers[*rs1] ^ ctx.registers[*rs2];
+    return Ok(());
+}
+
 fn xori(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
@@ -201,9 +231,11 @@ pub struct Instruction {
 pub enum InstructionType {
     ADD,
     ADDI,
+    AND,
     ANDI,
     AUIPC,
     LUI,
+    OR,
     ORI,
     SLLI,
     SLT,
@@ -212,6 +244,7 @@ pub enum InstructionType {
     SRAI,
     SRLI,
     SUB,
+    XOR,
     XORI,
 }
 
@@ -320,6 +353,49 @@ mod tests {
     }
 
     #[test]
+    fn test_and() {
+        let instruction = InstructionType::AND;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 1;
+        ctx.registers[RegisterType::T2] = 3;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::T1),
+                i3: Left(RegisterType::T2),
+            },
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 1);
+    }
+
+    #[test]
+    fn test_andi() {
+        let instruction = InstructionType::ANDI;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 1;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::T1),
+                i3: Right("3".to_string()),
+            },
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 1);
+    }
+
+    #[test]
     fn test_auipc() {
         let mut instructions = vec![
             Instruction {
@@ -414,6 +490,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 12288);
+    }
+
+    #[test]
+    fn test_or() {
+        let instruction = InstructionType::OR;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 1;
+        ctx.registers[RegisterType::T2] = 2;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::T1),
+                i3: Left(RegisterType::T2),
+            },
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 3);
     }
 
     #[test]
@@ -563,6 +661,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
+    }
+
+    #[test]
+    fn test_xor() {
+        let instruction = InstructionType::XOR;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 3;
+        ctx.registers[RegisterType::T2] = 4;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::T1),
+                i3: Left(RegisterType::T2),
+            },
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 7);
     }
 
     #[test]
