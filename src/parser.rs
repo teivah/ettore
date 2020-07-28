@@ -84,7 +84,6 @@ fn parse_register(s: String) -> Either<RegisterType, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::opcodes::RegisterType::ZERO;
     use crate::opcodes::{Instruction, InstructionType, RegisterType};
 
     #[test]

@@ -1,12 +1,12 @@
-* ANDI: AND immediate
-
-`andi rd, rs, immediate`
-
 * ADDI: add immediate (signed)
 
 `addi rd, rs, immediate`
 
 `addi rd, rs, immedate`: init rd to `immediate`
+
+* ANDI: AND immediate
+
+`andi rd, rs, immediate`
 
 * ORI: OR immediate
 
