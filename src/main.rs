@@ -1,4 +1,5 @@
 mod opcodes;
+mod parser;
 
 // use clap::{App as ClapApp, Arg};
 
