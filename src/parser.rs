@@ -14,8 +14,13 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
         let instruction_type_string = &trimmed_line[..first_whitespace.unwrap()];
         let instruction_type = match instruction_type_string {
             "addi" => InstructionType::ADDI,
-            "slti" => InstructionType::SLTI,
             "andi" => InstructionType::ANDI,
+            "lui" => InstructionType::LUI,
+            "ori" => InstructionType::ORI,
+            "slli" => InstructionType::SLLI,
+            "slti" => InstructionType::SLTI,
+            "srai" => InstructionType::SRAI,
+            "XORI" => InstructionType::XORI,
             _ => {
                 return Err(
                     format_args!("invalid instruction type: {}", instruction_type_string)
@@ -26,16 +31,25 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
 
         let remaining_line = &trimmed_line[first_whitespace.unwrap() + 1..];
         let elements: Vec<&str> = remaining_line.split(',').collect();
-        if elements.len() != 3 {
+        if elements.len() <= 1 {
             return Err(format_args!("missing elements: {}", remaining_line).to_string());
         }
 
-        instructions.push(Instruction {
-            instruction_type,
-            s1: parse_register(elements[0].trim().to_string()),
-            s2: parse_register(elements[1].trim().to_string()),
-            s3: parse_register(elements[2].trim().to_string()),
-        })
+        if elements.len() == 2 {
+            instructions.push(Instruction {
+                instruction_type,
+                i1: parse_register(elements[0].trim().to_string()),
+                i2: parse_register(elements[1].trim().to_string()),
+                i3: Right("".to_string()),
+            })
+        } else {
+            instructions.push(Instruction {
+                instruction_type,
+                i1: parse_register(elements[0].trim().to_string()),
+                i2: parse_register(elements[1].trim().to_string()),
+                i3: parse_register(elements[2].trim().to_string()),
+            })
+        }
     }
 
     return Ok(instructions);
@@ -90,27 +104,37 @@ mod tests {
     fn test_parse() {
         let result = parse(
             "addi t0, zero, 10
-slti t1, t0, 11"
+slti t1, t0, 11
+lui t2, 3"
                 .to_string(),
         );
         let instructions = result.unwrap();
-        assert_eq!(2, instructions.len());
+        assert_eq!(3, instructions.len());
         assert_eq!(
             instructions[0],
             Instruction {
                 instruction_type: InstructionType::ADDI,
-                s1: Left(RegisterType::T0),
-                s2: Left(RegisterType::ZERO),
-                s3: Right("10".to_string()),
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::ZERO),
+                i3: Right("10".to_string()),
             }
         );
         assert_eq!(
             instructions[1],
             Instruction {
                 instruction_type: InstructionType::SLTI,
-                s1: Left(RegisterType::T1),
-                s2: Left(RegisterType::T0),
-                s3: Right("11".to_string()),
+                i1: Left(RegisterType::T1),
+                i2: Left(RegisterType::T0),
+                i3: Right("11".to_string()),
+            }
+        );
+        assert_eq!(
+            instructions[2],
+            Instruction {
+                instruction_type: InstructionType::LUI,
+                i1: Left(RegisterType::T2),
+                i2: Right("3".to_string()),
+                i3: Right("".to_string()),
             }
         );
     }
