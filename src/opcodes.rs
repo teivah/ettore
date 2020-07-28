@@ -34,6 +34,7 @@ impl Runner {
             InstructionType::ANDI => andi,
             InstructionType::AUIPC => auipc,
             InstructionType::LUI => lui,
+            InstructionType::NOP => nop,
             InstructionType::OR => or,
             InstructionType::ORI => ori,
             InstructionType::SLL => sll,
@@ -113,6 +114,10 @@ fn lui(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Strin
     let rd = register(&instruction.i1)?;
 
     ctx.registers[*rd] = imm << 12;
+    return Ok(());
+}
+
+fn nop(_: &mut Context, _: &Instruction, _: i32) -> Result<(), String> {
     return Ok(());
 }
 
@@ -256,6 +261,7 @@ pub enum InstructionType {
     ANDI,
     AUIPC,
     LUI,
+    NOP,
     OR,
     ORI,
     SLL,

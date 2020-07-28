@@ -19,6 +19,7 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
             "andi" => InstructionType::ANDI,
             "auipc" => InstructionType::AUIPC,
             "lui" => InstructionType::LUI,
+            "nop" => InstructionType::NOP,
             "or" => InstructionType::OR,
             "ori" => InstructionType::ORI,
             "sll" => InstructionType::SLL,
@@ -47,7 +48,21 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
             return Err(format_args!("missing elements: {}", remaining_line).to_string());
         }
 
-        if elements.len() == 2 {
+        if elements.len() == 0 {
+            instructions.push(Instruction {
+                instruction_type,
+                i1: Right("".to_string()),
+                i2: Right("".to_string()),
+                i3: Right("".to_string()),
+            })
+        } else if elements.len() == 1 {
+            instructions.push(Instruction {
+                instruction_type,
+                i1: parse_register(elements[0].trim().to_string()),
+                i2: Right("".to_string()),
+                i3: Right("".to_string()),
+            })
+        } else if elements.len() == 2 {
             instructions.push(Instruction {
                 instruction_type,
                 i1: parse_register(elements[0].trim().to_string()),
