@@ -11,6 +11,7 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
             return Err(format_args!("invalid line: {}", trimmed_line).to_string());
         }
 
+        // TODO parse labels
         let instruction_type_string = &trimmed_line[..first_whitespace.unwrap()];
         let instruction_type = match instruction_type_string {
             "add" => InstructionType::ADD,
@@ -18,6 +19,7 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
             "and" => InstructionType::AND,
             "andi" => InstructionType::ANDI,
             "auipc" => InstructionType::AUIPC,
+            "jal" => InstructionType::JAL,
             "lui" => InstructionType::LUI,
             "nop" => InstructionType::NOP,
             "or" => InstructionType::OR,

@@ -1,38 +1,45 @@
 use either::*;
 use enum_map::{Enum, EnumMap};
+use std::collections::HashMap;
 
 struct Runner {
     ctx: Context,
     instructions: Vec<Instruction>,
+    labels: HashMap<String, i32>,
 }
 
 impl Runner {
-    fn new(instructions: Vec<Instruction>) -> Self {
+    fn new(instructions: Vec<Instruction>, labels: HashMap<String, i32>) -> Self {
         Runner {
             ctx: Context::new(),
             instructions,
+            labels,
         }
     }
 
     fn run(&mut self) -> Result<(), String> {
-        let mut address: i32 = 0;
-        for instruction in &self.instructions {
+        while self.ctx.pc / 4 < self.instructions.len() as i32 {
+            let instruction = &self.instructions[(self.ctx.pc / 4) as usize];
             let runner = Runner::get_runner(&instruction.instruction_type);
-            runner(&mut self.ctx, instruction, address)?;
-            address += 4;
+            runner(&mut self.ctx, instruction, &self.labels)?;
         }
         return Ok(());
     }
 
     fn get_runner(
         instruction_type: &InstructionType,
-    ) -> fn(ctx: &mut Context, instruction: &Instruction, addr: i32) -> Result<(), String> {
+    ) -> fn(
+        ctx: &mut Context,
+        instruction: &Instruction,
+        labels: &HashMap<String, i32>,
+    ) -> Result<(), String> {
         return match instruction_type {
             InstructionType::ADD => add,
             InstructionType::ADDI => addi,
             InstructionType::AND => and,
             InstructionType::ANDI => andi,
             InstructionType::AUIPC => auipc,
+            InstructionType::JAL => jal,
             InstructionType::LUI => lui,
             InstructionType::NOP => nop,
             InstructionType::OR => or,
@@ -55,109 +62,184 @@ impl Runner {
 
 struct Context {
     registers: EnumMap<RegisterType, i32>,
+    pc: i32,
 }
 
 impl Context {
     fn new() -> Self {
         Context {
             registers: EnumMap::<RegisterType, i32>::new(),
+            pc: 0,
         }
     }
 }
 
-fn add(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn add(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
 
     ctx.registers[*rd] = ctx.registers[*rs1] + ctx.registers[*rs2];
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn addi(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn addi(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
     let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] + imm;
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn and(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn and(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
 
     ctx.registers[*rd] = ctx.registers[*rs1] & ctx.registers[*rs2];
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn andi(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn andi(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
     let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] & imm;
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn auipc(ctx: &mut Context, instruction: &Instruction, address: i32) -> Result<(), String> {
+fn auipc(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i2)?;
     let rd = register(&instruction.i1)?;
 
-    ctx.registers[*rd] = address + (imm << 12);
+    ctx.registers[*rd] = ctx.pc + (imm << 12);
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn lui(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn jal(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    labels: &HashMap<String, i32>,
+) -> Result<(), String> {
+    let label = string(&instruction.i2)?;
+    let addr: i32;
+    match labels.get(label.as_str()) {
+        Some(v) => addr = *v,
+        None => return Err(format_args!("label {} does not exist", label).to_string()),
+    }
+    let rd = register(&instruction.i1)?;
+
+    ctx.registers[*rd] = ctx.pc + 4;
+    ctx.pc = addr;
+    return Ok(());
+}
+
+fn lui(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i2)?;
     let rd = register(&instruction.i1)?;
 
     ctx.registers[*rd] = imm << 12;
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn nop(_: &mut Context, _: &Instruction, _: i32) -> Result<(), String> {
+fn nop(ctx: &mut Context, _: &Instruction, _: &HashMap<String, i32>) -> Result<(), String> {
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn or(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn or(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
 
     ctx.registers[*rd] = ctx.registers[*rs1] | ctx.registers[*rs2];
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn ori(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn ori(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
     let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] | imm;
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn sll(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn sll(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
 
     ctx.registers[*rd] = ctx.registers[*rs1] << ctx.registers[*rs2];
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn slli(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn slli(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
     let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] << imm;
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn slt(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn slt(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
@@ -167,10 +249,15 @@ fn slt(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Strin
     } else {
         ctx.registers[*rd] = 0
     }
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn slti(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn slti(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
     let rs = register(&instruction.i2)?;
@@ -180,51 +267,77 @@ fn slti(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Stri
     } else {
         ctx.registers[*rd] = 0
     }
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn srl(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn srl(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
 
     ctx.registers[*rd] = ctx.registers[*rs1] >> ctx.registers[*rs2];
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn srli(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn srli(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
     let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] >> imm;
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn sub(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn sub(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
 
     ctx.registers[*rd] = ctx.registers[*rs1] - ctx.registers[*rs2];
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn xor(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn xor(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let rd = register(&instruction.i1)?;
     let rs1 = register(&instruction.i2)?;
     let rs2 = register(&instruction.i3)?;
 
     ctx.registers[*rd] = ctx.registers[*rs1] ^ ctx.registers[*rs2];
+    ctx.pc += 4;
     return Ok(());
 }
 
-fn xori(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+fn xori(
+    ctx: &mut Context,
+    instruction: &Instruction,
+    _: &HashMap<String, i32>,
+) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
     let rs = register(&instruction.i2)?;
 
     ctx.registers[*rd] = ctx.registers[*rs] ^ imm;
+    ctx.pc += 4;
     return Ok(());
 }
 
@@ -245,6 +358,13 @@ fn i32(e: &Either<RegisterType, String>) -> Result<i32, String> {
     };
 }
 
+fn string(e: &Either<RegisterType, String>) -> Result<String, String> {
+    return match e {
+        Right(s) => Ok(s.clone()),
+        Left(_) => Err("not integer type".to_string()),
+    };
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Instruction {
     pub instruction_type: InstructionType,
@@ -260,6 +380,7 @@ pub enum InstructionType {
     AND,
     ANDI,
     AUIPC,
+    JAL,
     LUI,
     NOP,
     OR,
@@ -334,7 +455,7 @@ mod tests {
                 i3: Right("1".to_string()),
             },
         ];
-        let mut runner = Runner::new(instructions);
+        let mut runner = Runner::new(instructions, HashMap::new());
         runner.run().unwrap();
         assert_eq!(runner.ctx.registers[RegisterType::T1], 2);
     }
@@ -355,7 +476,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
@@ -376,7 +497,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("1".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 2);
@@ -398,7 +519,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -419,7 +540,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("3".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -447,7 +568,7 @@ mod tests {
                 i3: Right("".to_string()),
             },
         ];
-        let mut runner = Runner::new(instructions);
+        let mut runner = Runner::new(instructions, HashMap::new());
         runner.run().unwrap();
         assert_eq!(runner.ctx.registers[RegisterType::T0], 8);
 
@@ -471,9 +592,40 @@ mod tests {
                 i3: Right("".to_string()),
             },
         ];
-        runner = Runner::new(instructions);
+        runner = Runner::new(instructions, HashMap::new());
         runner.run().unwrap();
         assert_eq!(runner.ctx.registers[RegisterType::T0], 4104);
+    }
+
+    #[test]
+    fn test_jal() {
+        let instructions = vec![
+            Instruction {
+                instruction_type: InstructionType::JAL,
+                i1: Left(RegisterType::T0),
+                i2: Right("foo".to_string()),
+                i3: Right("".to_string()),
+            },
+            Instruction {
+                instruction_type: InstructionType::ADDI,
+                i1: Left(RegisterType::T1),
+                i2: Left(RegisterType::ZERO),
+                i3: Right("1".to_string()),
+            },
+            Instruction {
+                instruction_type: InstructionType::ADDI,
+                i1: Left(RegisterType::T2),
+                i2: Left(RegisterType::ZERO),
+                i3: Right("2".to_string()),
+            },
+        ];
+        let mut labels = HashMap::new();
+        labels.insert("foo".to_string(), 8);
+        let mut runner = Runner::new(instructions, labels);
+        runner.run().unwrap();
+        assert_eq!(runner.ctx.registers[RegisterType::T0], 4);
+        assert_eq!(runner.ctx.registers[RegisterType::T1], 0);
+        assert_eq!(runner.ctx.registers[RegisterType::T2], 2);
     }
 
     #[test]
@@ -490,7 +642,7 @@ mod tests {
                 i2: Right("0".to_string()),
                 i3: Right("".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 0);
@@ -503,7 +655,7 @@ mod tests {
                 i2: Right("1".to_string()),
                 i3: Right("".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4096);
@@ -516,7 +668,7 @@ mod tests {
                 i2: Right("3".to_string()),
                 i3: Right("".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 12288);
@@ -538,7 +690,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
@@ -559,7 +711,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("2".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
@@ -581,7 +733,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
@@ -602,7 +754,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("2".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
@@ -624,7 +776,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -645,7 +797,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("5".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -667,7 +819,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -688,7 +840,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("1".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -710,7 +862,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -731,7 +883,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("2".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
@@ -753,7 +905,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
@@ -775,7 +927,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Left(RegisterType::T2),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 7);
@@ -796,7 +948,7 @@ mod tests {
                 i2: Left(RegisterType::T1),
                 i3: Right("4".to_string()),
             },
-            0,
+            &HashMap::new(),
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 7);
