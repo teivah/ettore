@@ -31,6 +31,8 @@ impl Runner {
             InstructionType::ORI => ori,
             InstructionType::SLLI => slli,
             InstructionType::SLTI => slti,
+            InstructionType::SRAI => srli,
+            InstructionType::SRLI => srli,
             InstructionType::XORI => xori,
         };
     }
@@ -97,6 +99,15 @@ fn slti(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
     return Ok(());
 }
 
+fn srli(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
+    let imm = ensure_i32(&instruction.s3)?;
+    let s1 = ensure_register(&instruction.s1)?;
+    let s2 = ensure_register(&instruction.s2)?;
+
+    ctx.registers[*s1] = ctx.registers[*s2] >> imm;
+    return Ok(());
+}
+
 fn xori(ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
     let imm = ensure_i32(&instruction.s3)?;
     let s1 = ensure_register(&instruction.s1)?;
@@ -138,6 +149,8 @@ pub enum InstructionType {
     ORI,
     SLLI,
     SLTI,
+    SRAI,
+    SRLI,
     XORI,
 }
 
@@ -276,6 +289,46 @@ mod tests {
                 s1: Left(RegisterType::T0),
                 s2: Left(RegisterType::T1),
                 s3: Right("5".to_string()),
+            },
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 1);
+    }
+
+    #[test]
+    fn test_srai() {
+        let instruction = InstructionType::SRAI;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 2;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                s1: Left(RegisterType::T0),
+                s2: Left(RegisterType::T1),
+                s3: Right("1".to_string()),
+            },
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 1);
+    }
+
+    #[test]
+    fn test_srli() {
+        let instruction = InstructionType::SRLI;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 4;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                s1: Left(RegisterType::T0),
+                s2: Left(RegisterType::T1),
+                s3: Right("2".to_string()),
             },
         )
         .unwrap();
