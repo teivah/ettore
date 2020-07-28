@@ -28,6 +28,7 @@ impl Runner {
         instruction_type: &InstructionType,
     ) -> fn(ctx: &mut Context, instruction: &Instruction, addr: i32) -> Result<(), String> {
         return match instruction_type {
+            InstructionType::ADD => add,
             InstructionType::ADDI => addi,
             InstructionType::ANDI => andi,
             InstructionType::AUIPC => auipc,
@@ -37,6 +38,7 @@ impl Runner {
             InstructionType::SLTI => slti,
             InstructionType::SRAI => srli,
             InstructionType::SRLI => srli,
+            InstructionType::SUB => sub,
             InstructionType::XORI => xori,
         };
     }
@@ -52,6 +54,15 @@ impl Context {
             registers: EnumMap::<RegisterType, i32>::new(),
         }
     }
+}
+
+fn add(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let rd = register(&instruction.i1)?;
+    let rs1 = register(&instruction.i2)?;
+    let rs2 = register(&instruction.i3)?;
+
+    ctx.registers[*rd] = ctx.registers[*rs1] + ctx.registers[*rs2];
+    return Ok(());
 }
 
 fn addi(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
@@ -128,6 +139,15 @@ fn srli(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Stri
     return Ok(());
 }
 
+fn sub(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let rd = register(&instruction.i1)?;
+    let rs1 = register(&instruction.i2)?;
+    let rs2 = register(&instruction.i3)?;
+
+    ctx.registers[*rd] = ctx.registers[*rs1] - ctx.registers[*rs2];
+    return Ok(());
+}
+
 fn xori(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
@@ -164,6 +184,7 @@ pub struct Instruction {
 
 #[derive(PartialEq, Debug, Enum, Clone, Copy)]
 pub enum InstructionType {
+    ADD,
     ADDI,
     ANDI,
     AUIPC,
@@ -173,6 +194,7 @@ pub enum InstructionType {
     SLTI,
     SRAI,
     SRLI,
+    SUB,
     XORI,
 }
 
@@ -235,6 +257,28 @@ mod tests {
         let mut runner = Runner::new(instructions);
         runner.run().unwrap();
         assert_eq!(runner.ctx.registers[RegisterType::T1], 2);
+    }
+
+    #[test]
+    fn test_add() {
+        let instruction = InstructionType::ADD;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 1;
+        ctx.registers[RegisterType::T2] = 2;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::T1),
+                i3: Left(RegisterType::T2),
+            },
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 3);
     }
 
     #[test]
@@ -458,6 +502,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
+    }
+
+    #[test]
+    fn test_sub() {
+        let instruction = InstructionType::SUB;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 10;
+        ctx.registers[RegisterType::T2] = 6;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::T1),
+                i3: Left(RegisterType::T2),
+            },
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 4);
     }
 
     #[test]

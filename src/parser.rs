@@ -13,6 +13,7 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
 
         let instruction_type_string = &trimmed_line[..first_whitespace.unwrap()];
         let instruction_type = match instruction_type_string {
+            "add" => InstructionType::ADD,
             "addi" => InstructionType::ADDI,
             "andi" => InstructionType::ANDI,
             "auipc" => InstructionType::AUIPC,
@@ -21,7 +22,8 @@ fn parse(s: String) -> Result<Vec<Instruction>, String> {
             "slli" => InstructionType::SLLI,
             "slti" => InstructionType::SLTI,
             "srai" => InstructionType::SRAI,
-            "XORI" => InstructionType::XORI,
+            "sub" => InstructionType::SUB,
+            "xori" => InstructionType::XORI,
             _ => {
                 return Err(
                     format_args!("invalid instruction type: {}", instruction_type_string)
