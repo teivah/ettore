@@ -29,6 +29,7 @@ impl Runner {
             InstructionType::ADDI => Ok(Box::new(ADDIRunner {})),
             InstructionType::ANDI => Ok(Box::new(ANDIRunner {})),
             InstructionType::ORI => Ok(Box::new(ORIRunner {})),
+            InstructionType::SLLI => Ok(Box::new(SLLIRunner {})),
             InstructionType::SLTI => Ok(Box::new(SLTIRunner {})),
             InstructionType::XORI => Ok(Box::new(XORIRunner {})),
         };
@@ -86,6 +87,19 @@ impl InstructionRunner for ORIRunner {
         let s2 = ensure_register(&instruction.s2)?;
 
         ctx.registers[*s1] = ctx.registers[*s2] | imm;
+        return Ok(());
+    }
+}
+
+struct SLLIRunner {}
+
+impl InstructionRunner for SLLIRunner {
+    fn run(self: Box<Self>, ctx: &mut Context, instruction: &Instruction) -> Result<(), String> {
+        let imm = ensure_i32(&instruction.s3)?;
+        let s1 = ensure_register(&instruction.s1)?;
+        let s2 = ensure_register(&instruction.s2)?;
+
+        ctx.registers[*s1] = ctx.registers[*s2] << imm;
         return Ok(());
     }
 }
@@ -150,6 +164,7 @@ pub enum InstructionType {
     ADDI,
     ANDI,
     ORI,
+    SLLI,
     SLTI,
     XORI,
 }
@@ -255,6 +270,27 @@ mod tests {
             )
             .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
+    }
+
+    #[test]
+    fn test_slli() {
+        let instruction = InstructionType::SLLI;
+        let runner = Runner::get_runner(&instruction).unwrap();
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 1;
+
+        runner
+            .run(
+                &mut ctx,
+                &Instruction {
+                    instruction_type: instruction,
+                    s1: Left(RegisterType::T0),
+                    s2: Left(RegisterType::T1),
+                    s3: Right("2".to_string()),
+                },
+            )
+            .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 4);
     }
 
     #[test]
