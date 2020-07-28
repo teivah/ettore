@@ -35,7 +35,9 @@ impl Runner {
             InstructionType::LUI => lui,
             InstructionType::ORI => ori,
             InstructionType::SLLI => slli,
+            InstructionType::SLT => slt,
             InstructionType::SLTI => slti,
+            InstructionType::SLTU => slt,
             InstructionType::SRAI => srli,
             InstructionType::SRLI => srli,
             InstructionType::SUB => sub,
@@ -117,6 +119,19 @@ fn slli(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), Stri
     return Ok(());
 }
 
+fn slt(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
+    let rd = register(&instruction.i1)?;
+    let rs1 = register(&instruction.i2)?;
+    let rs2 = register(&instruction.i3)?;
+
+    if ctx.registers[*rs1] < ctx.registers[*rs2] {
+        ctx.registers[*rd] = 1
+    } else {
+        ctx.registers[*rd] = 0
+    }
+    return Ok(());
+}
+
 fn slti(ctx: &mut Context, instruction: &Instruction, _: i32) -> Result<(), String> {
     let imm = i32(&instruction.i3)?;
     let rd = register(&instruction.i1)?;
@@ -170,7 +185,7 @@ fn i32(e: &Either<RegisterType, String>) -> Result<i32, String> {
             Ok(n) => Ok(n),
             Err(e) => Err(e.to_string()),
         },
-        Left(_) => Err("not immediate type".to_string()),
+        Left(_) => Err("not integer type".to_string()),
     };
 }
 
@@ -191,7 +206,9 @@ pub enum InstructionType {
     LUI,
     ORI,
     SLLI,
+    SLT,
     SLTI,
+    SLTU,
     SRAI,
     SRLI,
     SUB,
@@ -439,6 +456,28 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
+    }
+
+    #[test]
+    fn test_slt() {
+        let instruction = InstructionType::SLT;
+        let runner = Runner::get_runner(&instruction);
+        let mut ctx = Context::new();
+        ctx.registers[RegisterType::T1] = 2;
+        ctx.registers[RegisterType::T2] = 3;
+
+        runner(
+            &mut ctx,
+            &Instruction {
+                instruction_type: instruction,
+                i1: Left(RegisterType::T0),
+                i2: Left(RegisterType::T1),
+                i3: Left(RegisterType::T2),
+            },
+            0,
+        )
+        .unwrap();
+        assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
