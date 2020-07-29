@@ -144,6 +144,29 @@ impl InstructionRunner for Beq {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Bne {
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+    pub label: String,
+}
+
+impl InstructionRunner for Bne {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] != ctx.registers[self.rs2] {
+            let addr: i32;
+            match labels.get(self.label.as_str()) {
+                Some(v) => addr = *v,
+                None => return Err(format_args!("label {} does not exist", self.label).to_string()),
+            }
+            ctx.pc = addr;
+        } else {
+            ctx.pc += 4;
+        }
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Jal {
     pub label: String,
     pub rd: RegisterType,
@@ -553,7 +576,7 @@ mod tests {
         assert(
             HashMap::new(),
             "beq t0, t1, foo
-            addi t0, zero, 1
+            addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
@@ -562,7 +585,28 @@ mod tests {
         assert(
             map! {RegisterType::T0 => 1},
             "beq t0, t1, foo
-            addi t0, zero, 1
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+        );
+    }
+
+    #[test]
+    fn test_bne() {
+        assert(
+            HashMap::new(),
+            "bne t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+        );
+
+        assert(
+            map! {RegisterType::T0 => 1},
+            "bne t0, t1, foo
+            addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 1, RegisterType::T1 => 1},

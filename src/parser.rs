@@ -70,6 +70,17 @@ pub fn parse(s: String) -> Result<Application, String> {
                     label,
                 })
             }
+            "bne" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let label = elements[2].trim().to_string();
+                Box::new(Bne {
+                    rs1: rd,
+                    rs2: rs,
+                    label,
+                })
+            }
             "jal" => {
                 validate_args(2, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
