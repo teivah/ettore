@@ -1,8 +1,10 @@
 use crate::opcodes::*;
+use std::collections::HashMap;
 
-fn parse(s: String) -> Result<Application, String> {
+pub fn parse(s: String) -> Result<Application, String> {
     let mut instructions: Vec<Box<dyn InstructionRunner>> = vec![];
-    let mut labels: Vec<String> = vec![];
+    let mut labels = HashMap::new();
+    let mut pc: i32 = 0;
 
     for line in s.split("\n") {
         let trimmed_line = line.trim();
@@ -15,7 +17,7 @@ fn parse(s: String) -> Result<Application, String> {
         if first_whitespace.is_none() && last_character != ':' {
             return Err(format_args!("invalid line: {}", trimmed_line).to_string());
         } else if first_whitespace.is_none() && last_character == ':' {
-            labels.push(trimmed_line[..trimmed_line.len() - 1].to_string());
+            labels.insert(trimmed_line[..trimmed_line.len() - 1].to_string(), pc);
             continue;
         }
 
@@ -56,6 +58,17 @@ fn parse(s: String) -> Result<Application, String> {
                 let rd = parse_register(elements[0].trim().to_string())?;
                 let imm = i32(elements[1].trim().to_string())?;
                 Box::new(Auipc { rd, imm })
+            }
+            "beq" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let label = elements[2].trim().to_string();
+                Box::new(Beq {
+                    rs1: rd,
+                    rs2: rs,
+                    label,
+                })
             }
             "jal" => {
                 validate_args(2, &elements, remaining_line)?;
@@ -183,6 +196,7 @@ fn parse(s: String) -> Result<Application, String> {
             }
         };
         instructions.push(instruction);
+        pc += 4;
     }
 
     return Ok(Application {
@@ -248,24 +262,4 @@ fn parse_register(s: String) -> Result<RegisterType, String> {
         "t6" => Ok(RegisterType::T6),
         _ => Err(format_args!("unknown register: {}", s).to_string()),
     };
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse() {
-        let result = parse(
-            "    jal t0, foo
-    addi t1, zero, 1
-foo:
-    addi t2, zero, 2"
-                .to_string(),
-        );
-        let application = result.unwrap();
-        assert_eq!(3, application.instructions.len());
-        assert_eq!(1, application.labels.len());
-        assert_eq!("foo", application.labels[0]);
-    }
 }

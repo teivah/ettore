@@ -3,28 +3,26 @@ use std::collections::HashMap;
 
 pub struct Application {
     pub instructions: Vec<Box<dyn InstructionRunner>>,
-    pub labels: Vec<String>,
+    pub labels: HashMap<String, i32>,
 }
 
 struct Runner {
     ctx: Context,
-    instructions: Vec<Box<dyn InstructionRunner>>,
-    labels: HashMap<String, i32>,
+    application: Application,
 }
 
 impl Runner {
-    fn new(instructions: Vec<Box<dyn InstructionRunner>>, labels: HashMap<String, i32>) -> Self {
+    fn new(application: Application) -> Self {
         Runner {
             ctx: Context::new(),
-            instructions,
-            labels,
+            application,
         }
     }
 
     fn run(&mut self) -> Result<(), String> {
-        while self.ctx.pc / 4 < self.instructions.len() as i32 {
-            let runner = &self.instructions[(self.ctx.pc / 4) as usize];
-            runner.run(&mut self.ctx, &self.labels)?;
+        while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
+            let runner = &self.application.instructions[(self.ctx.pc / 4) as usize];
+            runner.run(&mut self.ctx, &self.application.labels)?;
         }
         return Ok(());
     }
@@ -118,6 +116,29 @@ impl InstructionRunner for Auipc {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         ctx.registers[self.rd] = ctx.pc + (self.imm << 12);
         ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Beq {
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+    pub label: String,
+}
+
+impl InstructionRunner for Beq {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] == ctx.registers[self.rs2] {
+            let addr: i32;
+            match labels.get(self.label.as_str()) {
+                Some(v) => addr = *v,
+                None => return Err(format_args!("label {} does not exist", self.label).to_string()),
+            }
+            ctx.pc = addr;
+        } else {
+            ctx.pc += 4;
+        }
         return Ok(());
     }
 }
@@ -403,7 +424,7 @@ impl InstructionRunner for Xori {
     }
 }
 
-#[derive(PartialEq, Debug, Enum, Clone, Copy)]
+#[derive(PartialEq, Debug, Enum, Clone, Copy, Eq, Hash)]
 pub enum RegisterType {
     ZERO,
     RA,
@@ -442,399 +463,264 @@ pub enum RegisterType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::parse;
 
-    #[test]
-    fn test_runner() {
-        let instructions: Vec<Box<dyn InstructionRunner>> = vec![
-            Box::new(Add {
-                rd: RegisterType::T0,
-                rs1: RegisterType::T1,
-                rs2: RegisterType::T2,
-            }),
-            Box::new(Add {
-                rd: RegisterType::T0,
-                rs1: RegisterType::T0,
-                rs2: RegisterType::T2,
-            }),
-        ];
-        let mut runner = Runner::new(instructions, HashMap::new());
-        runner.ctx.registers[RegisterType::T1] = 1;
-        runner.ctx.registers[RegisterType::T2] = 2;
+    macro_rules! map(
+    { $($key:expr => $value:expr),+ } => {
+        {
+            let mut m = ::std::collections::HashMap::new();
+            $(
+                m.insert($key, $value);
+            )+
+            m
+        }
+     };
+);
+
+    fn assert(
+        registers: HashMap<RegisterType, i32>,
+        instructions: &str,
+        assertions: HashMap<RegisterType, i32>,
+    ) {
+        let application = parse(instructions.to_string()).unwrap();
+        let mut runner = Runner::new(application);
+        for register in registers {
+            runner.ctx.registers[register.0] = register.1;
+        }
         runner.run().unwrap();
-        assert_eq!(runner.ctx.registers[RegisterType::T0], 5);
+        for assertion in assertions {
+            assert_eq!(runner.ctx.registers[assertion.0], assertion.1);
+        }
     }
 
     #[test]
     fn test_add() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-        ctx.registers[RegisterType::T2] = 2;
-
-        let runner = Add {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 3);
+        assert(
+            map! {RegisterType::T1 => 1, RegisterType::T2 => 2},
+            "add t0, t1, t2",
+            map! {RegisterType::T0 => 3},
+        );
     }
 
     #[test]
     fn test_addi() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-
-        let runner = Addi {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 1,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 2);
+        assert(
+            map! {RegisterType::T1 => 1},
+            "addi t0, t1, 1",
+            map! {RegisterType::T0 => 2},
+        );
     }
 
     #[test]
     fn test_and() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-        ctx.registers[RegisterType::T2] = 3;
-
-        let runner = And {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 1, RegisterType::T2 => 3},
+            "and t0, t1, t2",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_andi() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-
-        let runner = Andi {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 3,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 1},
+            "andi t0, t1, 3",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_auipc() {
-        let mut instructions: Vec<Box<dyn InstructionRunner>> = vec![
-            Box::new(Auipc {
-                rd: RegisterType::T0,
-                imm: 0,
-            }),
-            Box::new(Auipc {
-                rd: RegisterType::T0,
-                imm: 0,
-            }),
-            Box::new(Auipc {
-                rd: RegisterType::T0,
-                imm: 0,
-            }),
-        ];
-        let mut runner = Runner::new(instructions, HashMap::new());
-        runner.run().unwrap();
-        assert_eq!(runner.ctx.registers[RegisterType::T0], 8);
+        assert(
+            HashMap::new(),
+            "auipc t0, 0
+            auipc t0, 0
+            auipc t0, 0",
+            map! {RegisterType::T0 => 8},
+        );
 
-        instructions = vec![
-            Box::new(Auipc {
-                rd: RegisterType::T0,
-                imm: 1,
-            }),
-            Box::new(Auipc {
-                rd: RegisterType::T0,
-                imm: 1,
-            }),
-            Box::new(Auipc {
-                rd: RegisterType::T0,
-                imm: 1,
-            }),
-        ];
-        let mut runner = Runner::new(instructions, HashMap::new());
-        runner.run().unwrap();
-        assert_eq!(runner.ctx.registers[RegisterType::T0], 4104);
+        assert(
+            HashMap::new(),
+            "auipc t0, 1
+            auipc t0, 1
+            auipc t0, 1",
+            map! {RegisterType::T0 => 4104},
+        );
+    }
+
+    #[test]
+    fn test_beq() {
+        assert(
+            HashMap::new(),
+            "beq t0, t1, foo
+            addi t0, zero, 1
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+        );
+
+        assert(
+            map! {RegisterType::T0 => 1},
+            "beq t0, t1, foo
+            addi t0, zero, 1
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 1, RegisterType::T1 => 1},
+        );
     }
 
     #[test]
     fn test_jal() {
-        let instructions: Vec<Box<dyn InstructionRunner>> = vec![
-            Box::new(Jal {
-                rd: RegisterType::T0,
-                label: "foo".to_string(),
-            }),
-            Box::new(Addi {
-                rd: RegisterType::T1,
-                rs: RegisterType::ZERO,
-                imm: 1,
-            }),
-            Box::new(Addi {
-                rd: RegisterType::T2,
-                rs: RegisterType::ZERO,
-                imm: 2,
-            }),
-        ];
-        let mut labels = HashMap::new();
-        labels.insert("foo".to_string(), 8);
-
-        let mut runner = Runner::new(instructions, labels);
-        runner.run().unwrap();
-        assert_eq!(runner.ctx.registers[RegisterType::T0], 4);
-        assert_eq!(runner.ctx.registers[RegisterType::T1], 0);
-        assert_eq!(runner.ctx.registers[RegisterType::T2], 2);
+        assert(
+            HashMap::new(),
+            "jal t0, foo
+            addi t1, zero, 1
+            foo:            
+            addi t2, zero, 2",
+            map! {RegisterType::T0 => 4, RegisterType::T1 => 0,RegisterType::T2 => 2},
+        );
     }
 
     #[test]
     fn test_jalr() {
-        let instructions: Vec<Box<dyn InstructionRunner>> = vec![
-            Box::new(Addi {
-                rd: RegisterType::T1,
-                rs: RegisterType::ZERO,
-                imm: 4,
-            }),
-            Box::new(Jalr {
-                rd: RegisterType::T0,
-                rs: RegisterType::T1,
-                imm: 8,
-            }),
-            Box::new(Addi {
-                rd: RegisterType::T2,
-                rs: RegisterType::ZERO,
-                imm: 2,
-            }),
-            Box::new(Addi {
-                rd: RegisterType::T1,
-                rs: RegisterType::ZERO,
-                imm: 2,
-            }),
-        ];
-        let mut labels = HashMap::new();
-        labels.insert("foo".to_string(), 8);
-
-        let mut runner = Runner::new(instructions, labels);
-        runner.run().unwrap();
-        assert_eq!(runner.ctx.registers[RegisterType::T0], 8);
-        assert_eq!(runner.ctx.registers[RegisterType::T1], 2);
-        assert_eq!(runner.ctx.registers[RegisterType::T2], 0);
+        assert(
+            HashMap::new(),
+            "addi t1, zero, 4
+            jalr t0, t1, 8
+            foo:            
+            addi t2, zero, 2
+            addi t1, zero, 2",
+            map! {RegisterType::T0 => 8, RegisterType::T1 => 2,RegisterType::T2 => 0},
+        );
     }
 
     #[test]
     fn test_lui() {
-        let mut ctx = Context::new();
+        assert(HashMap::new(), "lui t0, 0", map! {RegisterType::T0 => 0});
 
-        let runner = Lui {
-            rd: RegisterType::T0,
-            imm: 0,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 0);
+        assert(HashMap::new(), "lui t0, 1", map! {RegisterType::T0 => 4096});
 
-        let runner = Lui {
-            rd: RegisterType::T0,
-            imm: 1,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 4096);
-
-        let runner = Lui {
-            rd: RegisterType::T0,
-            imm: 3,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 12288);
+        assert(
+            HashMap::new(),
+            "lui t0, 3",
+            map! {RegisterType::T0 => 12288},
+        );
     }
 
     #[test]
     fn test_or() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-        ctx.registers[RegisterType::T2] = 2;
-
-        let runner = Or {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 3);
+        assert(
+            map! {RegisterType::T1 => 1, RegisterType::T2 => 2},
+            "or t0, t1, t2",
+            map! {RegisterType::T0 => 3},
+        );
     }
 
     #[test]
     fn test_ori() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-
-        let runner = Ori {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 3);
+        assert(
+            map! {RegisterType::T1 => 1},
+            "ori t0, t1, 2",
+            map! {RegisterType::T0 => 3},
+        );
     }
 
     #[test]
     fn test_sll() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-        ctx.registers[RegisterType::T2] = 2;
-
-        let runner = Sll {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 4);
+        assert(
+            map! {RegisterType::T1 => 1,RegisterType::T2 => 2},
+            "sll t0, t1, t2",
+            map! {RegisterType::T0 => 4},
+        );
     }
 
     #[test]
     fn test_slli() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
-
-        let runner = Slli {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 4);
+        assert(
+            map! {RegisterType::T1 => 1},
+            "slli t0, t1, 2",
+            map! {RegisterType::T0 => 4},
+        );
     }
 
     #[test]
     fn test_slt() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 2;
-        ctx.registers[RegisterType::T2] = 3;
-
-        let runner = Slt {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 2,RegisterType::T2 => 3},
+            "slt t0, t1, t2",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_slti() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 2;
-
-        let runner = Slti {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 5,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 2},
+            "slti t0, t1, 5",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_sra() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 2;
-        ctx.registers[RegisterType::T2] = 1;
-
-        let runner = Sra {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 2, RegisterType::T2 => 1},
+            "sra t0, t1, t2",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_srai() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 2;
-
-        let runner = Srai {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 1,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 2},
+            "srai t0, t1, 1",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_srl() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 4;
-        ctx.registers[RegisterType::T2] = 2;
-
-        let runner = Srl {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 4,RegisterType::T2 => 2},
+            "srl t0, t1, t2",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_srli() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 4;
-
-        let runner = Srli {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 1);
+        assert(
+            map! {RegisterType::T1 => 4},
+            "srli t0, t1, 2",
+            map! {RegisterType::T0 => 1},
+        );
     }
 
     #[test]
     fn test_sub() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 10;
-        ctx.registers[RegisterType::T2] = 6;
-
-        let runner = Sub {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 4);
+        assert(
+            map! {RegisterType::T1 => 10, RegisterType::T2 => 6},
+            "sub t0, t1, t2",
+            map! {RegisterType::T0 => 4},
+        );
     }
 
     #[test]
     fn test_xor() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 3;
-        ctx.registers[RegisterType::T2] = 4;
-
-        let runner = Xor {
-            rd: RegisterType::T0,
-            rs1: RegisterType::T1,
-            rs2: RegisterType::T2,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 7);
+        assert(
+            map! {RegisterType::T1 => 3, RegisterType::T2 => 4},
+            "xor t0, t1, t2",
+            map! {RegisterType::T0 => 7},
+        );
     }
 
     #[test]
     fn test_xori() {
-        let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 3;
-
-        let runner = Xori {
-            rd: RegisterType::T0,
-            rs: RegisterType::T1,
-            imm: 4,
-        };
-        runner.run(&mut ctx, &HashMap::new()).unwrap();
-        assert_eq!(ctx.registers[RegisterType::T0], 7);
+        assert(
+            map! {RegisterType::T1 => 3},
+            "xori t0, t1, 4",
+            map! {RegisterType::T0 => 7},
+        );
     }
 }
