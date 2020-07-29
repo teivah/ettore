@@ -200,6 +200,13 @@ pub fn parse(s: String) -> Result<Application, String> {
                 let rs2 = parse_register(elements[2].trim().to_string())?;
                 Box::new(Sub { rd, rs1, rs2 })
             }
+            "sw" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rs2 = parse_register(elements[0].trim().to_string())?;
+                let offset = i32(elements[1].trim().to_string())?;
+                let rs1 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Sw { rs2, offset, rs1 })
+            }
             "xor" => {
                 validate_args(3, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;

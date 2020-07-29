@@ -12,9 +12,9 @@ struct Runner {
 }
 
 impl Runner {
-    fn new(application: Application) -> Self {
+    fn new(application: Application, memory_bytes: usize) -> Self {
         Runner {
-            ctx: Context::new(),
+            ctx: Context::new(memory_bytes),
             application,
         }
     }
@@ -30,13 +30,15 @@ impl Runner {
 
 pub struct Context {
     registers: EnumMap<RegisterType, i32>,
+    memory: Vec<i8>,
     pc: i32,
 }
 
 impl Context {
-    fn new() -> Self {
+    fn new(memory_bytes: usize) -> Self {
         Context {
             registers: EnumMap::<RegisterType, i32>::new(),
+            memory: vec![0; memory_bytes],
             pc: 0,
         }
     }
@@ -468,6 +470,78 @@ impl InstructionRunner for Sub {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Sw {
+    pub rs2: RegisterType,
+    pub offset: i32,
+    pub rs1: RegisterType,
+}
+
+impl InstructionRunner for Sw {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        let mut idx = ctx.registers[self.rs1] + self.offset;
+        let n = ctx.registers[self.rs2];
+        let bytes = bytes_from_low_bits(n);
+        ctx.memory[idx as usize] = bytes.0;
+        idx += 1;
+        ctx.memory[idx as usize] = bytes.1;
+        idx += 1;
+        ctx.memory[idx as usize] = bytes.2;
+        idx += 1;
+        ctx.memory[idx as usize] = bytes.3;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+fn bytes_from_low_bits(n: i32) -> (i8, i8, i8, i8) {
+    let mut i1: i8 = 0;
+    let mut i2: i8 = 0;
+    let mut i3: i8 = 0;
+    let mut i4: i8 = 0;
+
+    let mut index: u8 = 0;
+    for i in 0..8 {
+        if get_bit(n, i) {
+            i1 = set_bit(i1, index);
+        }
+        index += 1;
+    }
+
+    index = 0;
+    for i in 8..16 {
+        if get_bit(n, i) {
+            i2 = set_bit(i2, index);
+        }
+        index += 1;
+    }
+
+    index = 0;
+    for i in 16..24 {
+        if get_bit(n, i) {
+            i3 = set_bit(i3, index);
+        }
+        index += 1;
+    }
+
+    index = 0;
+    for i in 24..32 {
+        if get_bit(n, i) {
+            i4 = set_bit(i4, index);
+        }
+        index += 1;
+    }
+
+    return (i1, i2, i3, i4);
+}
+
+fn get_bit(input: i32, n: u8) -> bool {
+    input & (1 << n) != 0
+}
+fn set_bit(n: i8, i: u8) -> i8 {
+    n | (1 << i)
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Xor {
     pub rd: RegisterType,
     pub rs1: RegisterType,
@@ -551,18 +625,27 @@ mod tests {
 );
 
     fn assert(
-        registers: HashMap<RegisterType, i32>,
+        init_registers: HashMap<RegisterType, i32>,
+        memory_bytes: usize,
+        init_memory: HashMap<usize, i8>,
         instructions: &str,
-        assertions: HashMap<RegisterType, i32>,
+        assertions_registers: HashMap<RegisterType, i32>,
+        assertions_memory: HashMap<usize, i8>,
     ) {
         let application = parse(instructions.to_string()).unwrap();
-        let mut runner = Runner::new(application);
-        for register in registers {
+        let mut runner = Runner::new(application, memory_bytes);
+        for register in init_registers {
             runner.ctx.registers[register.0] = register.1;
         }
+        for memory in init_memory {
+            runner.ctx.memory[memory.0] = memory.1;
+        }
         runner.run().unwrap();
-        for assertion in assertions {
+        for assertion in assertions_registers {
             assert_eq!(runner.ctx.registers[assertion.0], assertion.1);
+        }
+        for assertion in assertions_memory {
+            assert_eq!(runner.ctx.memory[assertion.0], assertion.1);
         }
     }
 
@@ -570,8 +653,11 @@ mod tests {
     fn test_add() {
         assert(
             map! {RegisterType::T1 => 1, RegisterType::T2 => 2},
+            0,
+            HashMap::new(),
             "add t0, t1, t2",
             map! {RegisterType::T0 => 3},
+            HashMap::new(),
         );
     }
 
@@ -579,8 +665,11 @@ mod tests {
     fn test_addi() {
         assert(
             map! {RegisterType::T1 => 1},
+            0,
+            HashMap::new(),
             "addi t0, t1, 1",
             map! {RegisterType::T0 => 2},
+            HashMap::new(),
         );
     }
 
@@ -588,8 +677,11 @@ mod tests {
     fn test_and() {
         assert(
             map! {RegisterType::T1 => 1, RegisterType::T2 => 3},
+            0,
+            HashMap::new(),
             "and t0, t1, t2",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -597,8 +689,11 @@ mod tests {
     fn test_andi() {
         assert(
             map! {RegisterType::T1 => 1},
+            0,
+            HashMap::new(),
             "andi t0, t1, 3",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -606,18 +701,24 @@ mod tests {
     fn test_auipc() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "auipc t0, 0
             auipc t0, 0
             auipc t0, 0",
             map! {RegisterType::T0 => 8},
+            HashMap::new(),
         );
 
         assert(
+            HashMap::new(),
+            0,
             HashMap::new(),
             "auipc t0, 1
             auipc t0, 1
             auipc t0, 1",
             map! {RegisterType::T0 => 4104},
+            HashMap::new(),
         );
     }
 
@@ -625,20 +726,26 @@ mod tests {
     fn test_beq() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "beq t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+            HashMap::new(),
         );
 
         assert(
             map! {RegisterType::T0 => 1},
+            0,
+            HashMap::new(),
             "beq t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+            HashMap::new(),
         );
     }
 
@@ -646,20 +753,26 @@ mod tests {
     fn test_bge() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "bge t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+            HashMap::new(),
         );
 
         assert(
             map! {RegisterType::T1 => 10},
+            0,
+            HashMap::new(),
             "bge t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+            HashMap::new(),
         );
     }
 
@@ -667,20 +780,26 @@ mod tests {
     fn test_bgeu() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "bgeu t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+            HashMap::new(),
         );
 
         assert(
             map! {RegisterType::T1 => 10},
+            0,
+            HashMap::new(),
             "bgeu t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+            HashMap::new(),
         );
     }
 
@@ -688,20 +807,26 @@ mod tests {
     fn test_blt() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "blt t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+            HashMap::new(),
         );
 
         assert(
             map! {RegisterType::T1 => 10},
+            0,
+            HashMap::new(),
             "blt t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+            HashMap::new(),
         );
     }
 
@@ -709,20 +834,26 @@ mod tests {
     fn test_bltu() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "blt t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+            HashMap::new(),
         );
 
         assert(
             map! {RegisterType::T1 => 10},
+            0,
+            HashMap::new(),
             "blt t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+            HashMap::new(),
         );
     }
 
@@ -730,20 +861,26 @@ mod tests {
     fn test_bne() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "bne t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+            HashMap::new(),
         );
 
         assert(
             map! {RegisterType::T0 => 1},
+            0,
+            HashMap::new(),
             "bne t0, t1, foo
             addi t0, zero, 2
             foo:
             addi t1, zero, 1",
             map! {RegisterType::T0 => 1, RegisterType::T1 => 1},
+            HashMap::new(),
         );
     }
 
@@ -751,11 +888,14 @@ mod tests {
     fn test_jal() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "jal t0, foo
             addi t1, zero, 1
             foo:            
             addi t2, zero, 2",
             map! {RegisterType::T0 => 4, RegisterType::T1 => 0,RegisterType::T2 => 2},
+            HashMap::new(),
         );
     }
 
@@ -763,25 +903,45 @@ mod tests {
     fn test_jalr() {
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
             "addi t1, zero, 4
             jalr t0, t1, 8
             foo:            
             addi t2, zero, 2
             addi t1, zero, 2",
             map! {RegisterType::T0 => 8, RegisterType::T1 => 2,RegisterType::T2 => 0},
+            HashMap::new(),
         );
     }
 
     #[test]
     fn test_lui() {
-        assert(HashMap::new(), "lui t0, 0", map! {RegisterType::T0 => 0});
-
-        assert(HashMap::new(), "lui t0, 1", map! {RegisterType::T0 => 4096});
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "lui t0, 0",
+            map! {RegisterType::T0 => 0},
+            HashMap::new(),
+        );
 
         assert(
             HashMap::new(),
+            0,
+            HashMap::new(),
+            "lui t0, 1",
+            map! {RegisterType::T0 => 4096},
+            HashMap::new(),
+        );
+
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
             "lui t0, 3",
             map! {RegisterType::T0 => 12288},
+            HashMap::new(),
         );
     }
 
@@ -789,8 +949,11 @@ mod tests {
     fn test_or() {
         assert(
             map! {RegisterType::T1 => 1, RegisterType::T2 => 2},
+            0,
+            HashMap::new(),
             "or t0, t1, t2",
             map! {RegisterType::T0 => 3},
+            HashMap::new(),
         );
     }
 
@@ -798,8 +961,11 @@ mod tests {
     fn test_ori() {
         assert(
             map! {RegisterType::T1 => 1},
+            0,
+            HashMap::new(),
             "ori t0, t1, 2",
             map! {RegisterType::T0 => 3},
+            HashMap::new(),
         );
     }
 
@@ -807,8 +973,11 @@ mod tests {
     fn test_sll() {
         assert(
             map! {RegisterType::T1 => 1,RegisterType::T2 => 2},
+            0,
+            HashMap::new(),
             "sll t0, t1, t2",
             map! {RegisterType::T0 => 4},
+            HashMap::new(),
         );
     }
 
@@ -816,8 +985,11 @@ mod tests {
     fn test_slli() {
         assert(
             map! {RegisterType::T1 => 1},
+            0,
+            HashMap::new(),
             "slli t0, t1, 2",
             map! {RegisterType::T0 => 4},
+            HashMap::new(),
         );
     }
 
@@ -825,8 +997,11 @@ mod tests {
     fn test_slt() {
         assert(
             map! {RegisterType::T1 => 2,RegisterType::T2 => 3},
+            0,
+            HashMap::new(),
             "slt t0, t1, t2",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -834,8 +1009,11 @@ mod tests {
     fn test_slti() {
         assert(
             map! {RegisterType::T1 => 2},
+            0,
+            HashMap::new(),
             "slti t0, t1, 5",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -843,8 +1021,11 @@ mod tests {
     fn test_sltu() {
         assert(
             map! {RegisterType::T1 => 2,RegisterType::T2 => 3},
+            0,
+            HashMap::new(),
             "sltu t0, t1, t2",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -852,8 +1033,11 @@ mod tests {
     fn test_sra() {
         assert(
             map! {RegisterType::T1 => 2, RegisterType::T2 => 1},
+            0,
+            HashMap::new(),
             "sra t0, t1, t2",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -861,8 +1045,11 @@ mod tests {
     fn test_srai() {
         assert(
             map! {RegisterType::T1 => 2},
+            0,
+            HashMap::new(),
             "srai t0, t1, 1",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -870,8 +1057,11 @@ mod tests {
     fn test_srl() {
         assert(
             map! {RegisterType::T1 => 4,RegisterType::T2 => 2},
+            0,
+            HashMap::new(),
             "srl t0, t1, t2",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -879,8 +1069,11 @@ mod tests {
     fn test_srli() {
         assert(
             map! {RegisterType::T1 => 4},
+            0,
+            HashMap::new(),
             "srli t0, t1, 2",
             map! {RegisterType::T0 => 1},
+            HashMap::new(),
         );
     }
 
@@ -888,8 +1081,32 @@ mod tests {
     fn test_sub() {
         assert(
             map! {RegisterType::T1 => 10, RegisterType::T2 => 6},
+            0,
+            HashMap::new(),
             "sub t0, t1, t2",
             map! {RegisterType::T0 => 4},
+            HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn test_sw() {
+        assert(
+            map! {RegisterType::T0 => 258, RegisterType::T1 => 1},
+            8,
+            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>1, 5=>1, 6=>1, 7=>1 },
+            "sw t0, 3, t1",
+            HashMap::new(),
+            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>2, 5=>1, 6=>0, 7=>0 },
+        );
+
+        assert(
+            map! {RegisterType::T0 => 2047, RegisterType::T1 => 1},
+            8,
+            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>1, 5=>1, 6=>1, 7=>1 },
+            "sw t0, 3, t1",
+            HashMap::new(),
+            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>-1, 5=>7, 6=>0, 7=>0 },
         );
     }
 
@@ -897,8 +1114,11 @@ mod tests {
     fn test_xor() {
         assert(
             map! {RegisterType::T1 => 3, RegisterType::T2 => 4},
+            0,
+            HashMap::new(),
             "xor t0, t1, t2",
             map! {RegisterType::T0 => 7},
+            HashMap::new(),
         );
     }
 
@@ -906,8 +1126,11 @@ mod tests {
     fn test_xori() {
         assert(
             map! {RegisterType::T1 => 3},
+            0,
+            HashMap::new(),
             "xori t0, t1, 4",
             map! {RegisterType::T0 => 7},
+            HashMap::new(),
         );
     }
 }
