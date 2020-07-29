@@ -143,6 +143,21 @@ impl InstructionRunner for Jal {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Jalr {
+    pub rd: RegisterType,
+    pub rs: RegisterType,
+    pub imm: i32,
+}
+
+impl InstructionRunner for Jalr {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.pc + 4;
+        ctx.pc = ctx.registers[self.rs] + self.imm;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Lui {
     pub rd: RegisterType,
     pub imm: i32,
@@ -572,6 +587,40 @@ mod tests {
         assert_eq!(runner.ctx.registers[RegisterType::T0], 4);
         assert_eq!(runner.ctx.registers[RegisterType::T1], 0);
         assert_eq!(runner.ctx.registers[RegisterType::T2], 2);
+    }
+
+    #[test]
+    fn test_jalr() {
+        let instructions: Vec<Box<dyn InstructionRunner>> = vec![
+            Box::new(Addi {
+                rd: RegisterType::T1,
+                rs: RegisterType::ZERO,
+                imm: 4,
+            }),
+            Box::new(Jalr {
+                rd: RegisterType::T0,
+                rs: RegisterType::T1,
+                imm: 8,
+            }),
+            Box::new(Addi {
+                rd: RegisterType::T2,
+                rs: RegisterType::ZERO,
+                imm: 2,
+            }),
+            Box::new(Addi {
+                rd: RegisterType::T1,
+                rs: RegisterType::ZERO,
+                imm: 2,
+            }),
+        ];
+        let mut labels = HashMap::new();
+        labels.insert("foo".to_string(), 8);
+
+        let mut runner = Runner::new(instructions, labels);
+        runner.run().unwrap();
+        assert_eq!(runner.ctx.registers[RegisterType::T0], 8);
+        assert_eq!(runner.ctx.registers[RegisterType::T1], 2);
+        assert_eq!(runner.ctx.registers[RegisterType::T2], 0);
     }
 
     #[test]

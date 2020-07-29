@@ -63,6 +63,13 @@ fn parse(s: String) -> Result<Application, String> {
                 let label = elements[1].trim().to_string();
                 Box::new(Jal { rd, label })
             }
+            "jalr" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Jalr { rd, rs, imm })
+            }
             "lui" => {
                 validate_args(2, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
