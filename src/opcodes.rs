@@ -1,15 +1,16 @@
 use either::*;
 use enum_map::{Enum, EnumMap};
+use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 
 struct Runner {
     ctx: Context,
-    instructions: Vec<Instruction>,
+    instructions: Vec<Box<dyn InstructionRunner>>,
     labels: HashMap<String, i32>,
 }
 
 impl Runner {
-    fn new(instructions: Vec<Instruction>, labels: HashMap<String, i32>) -> Self {
+    fn new(instructions: Vec<Box<dyn InstructionRunner>>, labels: HashMap<String, i32>) -> Self {
         Runner {
             ctx: Context::new(),
             instructions,
@@ -19,48 +20,14 @@ impl Runner {
 
     fn run(&mut self) -> Result<(), String> {
         while self.ctx.pc / 4 < self.instructions.len() as i32 {
-            let instruction = &self.instructions[(self.ctx.pc / 4) as usize];
-            let runner = Runner::get_runner(&instruction.instruction_type);
-            runner(&mut self.ctx, instruction, &self.labels)?;
+            let runner = &self.instructions[(self.ctx.pc / 4) as usize];
+            runner.run(&mut self.ctx, &self.labels)?;
         }
         return Ok(());
     }
-
-    fn get_runner(
-        instruction_type: &InstructionType,
-    ) -> fn(
-        ctx: &mut Context,
-        instruction: &Instruction,
-        labels: &HashMap<String, i32>,
-    ) -> Result<(), String> {
-        return match instruction_type {
-            InstructionType::ADD => add,
-            InstructionType::ADDI => addi,
-            InstructionType::AND => and,
-            InstructionType::ANDI => andi,
-            InstructionType::AUIPC => auipc,
-            InstructionType::JAL => jal,
-            InstructionType::LUI => lui,
-            InstructionType::NOP => nop,
-            InstructionType::OR => or,
-            InstructionType::ORI => ori,
-            InstructionType::SLL => sll,
-            InstructionType::SLLI => slli,
-            InstructionType::SLT => slt,
-            InstructionType::SLTI => slti,
-            InstructionType::SLTU => slt,
-            InstructionType::SRA => srl,
-            InstructionType::SRAI => srli,
-            InstructionType::SRL => srl,
-            InstructionType::SRLI => srli,
-            InstructionType::SUB => sub,
-            InstructionType::XOR => xor,
-            InstructionType::XORI => xori,
-        };
-    }
 }
 
-struct Context {
+pub struct Context {
     registers: EnumMap<RegisterType, i32>,
     pc: i32,
 }
@@ -74,295 +41,329 @@ impl Context {
     }
 }
 
-fn add(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs1] + ctx.registers[*rs2];
-    ctx.pc += 4;
-    return Ok(());
+pub trait InstructionRunner {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String>;
 }
 
-fn addi(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i3)?;
-    let rd = register(&instruction.i1)?;
-    let rs = register(&instruction.i2)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs] + imm;
-    ctx.pc += 4;
-    return Ok(());
+#[derive(PartialEq, Debug)]
+pub struct Add {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
 }
 
-fn and(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs1] & ctx.registers[*rs2];
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn andi(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i3)?;
-    let rd = register(&instruction.i1)?;
-    let rs = register(&instruction.i2)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs] & imm;
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn auipc(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i2)?;
-    let rd = register(&instruction.i1)?;
-
-    ctx.registers[*rd] = ctx.pc + (imm << 12);
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn jal(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    labels: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let label = string(&instruction.i2)?;
-    let addr: i32;
-    match labels.get(label.as_str()) {
-        Some(v) => addr = *v,
-        None => return Err(format_args!("label {} does not exist", label).to_string()),
+impl InstructionRunner for Add {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] + ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
     }
-    let rd = register(&instruction.i1)?;
-
-    ctx.registers[*rd] = ctx.pc + 4;
-    ctx.pc = addr;
-    return Ok(());
 }
 
-fn lui(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i2)?;
-    let rd = register(&instruction.i1)?;
-
-    ctx.registers[*rd] = imm << 12;
-    ctx.pc += 4;
-    return Ok(());
+#[derive(PartialEq, Debug)]
+pub struct Addi {
+    pub imm: i32,
+    pub rd: RegisterType,
+    pub rs: RegisterType,
 }
 
-fn nop(ctx: &mut Context, _: &Instruction, _: &HashMap<String, i32>) -> Result<(), String> {
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn or(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs1] | ctx.registers[*rs2];
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn ori(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i3)?;
-    let rd = register(&instruction.i1)?;
-    let rs = register(&instruction.i2)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs] | imm;
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn sll(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs1] << ctx.registers[*rs2];
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn slli(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i3)?;
-    let rd = register(&instruction.i1)?;
-    let rs = register(&instruction.i2)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs] << imm;
-    ctx.pc += 4;
-    return Ok(());
-}
-
-fn slt(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    if ctx.registers[*rs1] < ctx.registers[*rs2] {
-        ctx.registers[*rd] = 1
-    } else {
-        ctx.registers[*rd] = 0
+impl InstructionRunner for Addi {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs] + self.imm;
+        ctx.pc += 4;
+        return Ok(());
     }
-    ctx.pc += 4;
-    return Ok(());
 }
 
-fn slti(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i3)?;
-    let rd = register(&instruction.i1)?;
-    let rs = register(&instruction.i2)?;
+#[derive(PartialEq, Debug)]
+pub struct And {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
 
-    if ctx.registers[*rs] < imm {
-        ctx.registers[*rd] = 1
-    } else {
-        ctx.registers[*rd] = 0
+impl InstructionRunner for And {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] & ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
     }
-    ctx.pc += 4;
-    return Ok(());
 }
 
-fn srl(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs1] >> ctx.registers[*rs2];
-    ctx.pc += 4;
-    return Ok(());
+#[derive(PartialEq, Debug)]
+pub struct Andi {
+    pub imm: i32,
+    pub rd: RegisterType,
+    pub rs: RegisterType,
 }
 
-fn srli(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i3)?;
-    let rd = register(&instruction.i1)?;
-    let rs = register(&instruction.i2)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs] >> imm;
-    ctx.pc += 4;
-    return Ok(());
+impl InstructionRunner for Andi {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs] & self.imm;
+        ctx.pc += 4;
+        return Ok(());
+    }
 }
 
-fn sub(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs1] - ctx.registers[*rs2];
-    ctx.pc += 4;
-    return Ok(());
+#[derive(PartialEq, Debug)]
+pub struct Auipc {
+    pub imm: i32,
+    pub rd: RegisterType,
 }
 
-fn xor(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let rd = register(&instruction.i1)?;
-    let rs1 = register(&instruction.i2)?;
-    let rs2 = register(&instruction.i3)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs1] ^ ctx.registers[*rs2];
-    ctx.pc += 4;
-    return Ok(());
+impl InstructionRunner for Auipc {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.pc + (self.imm << 12);
+        ctx.pc += 4;
+        return Ok(());
+    }
 }
 
-fn xori(
-    ctx: &mut Context,
-    instruction: &Instruction,
-    _: &HashMap<String, i32>,
-) -> Result<(), String> {
-    let imm = i32(&instruction.i3)?;
-    let rd = register(&instruction.i1)?;
-    let rs = register(&instruction.i2)?;
-
-    ctx.registers[*rd] = ctx.registers[*rs] ^ imm;
-    ctx.pc += 4;
-    return Ok(());
+#[derive(PartialEq, Debug)]
+pub struct Jal {
+    pub label: String,
+    pub rd: RegisterType,
 }
 
-fn register(e: &Either<RegisterType, String>) -> Result<&RegisterType, String> {
-    return match e {
-        Left(r) => return Ok(r),
-        Right(_) => Err("not register type".to_string()),
-    };
+impl InstructionRunner for Jal {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+        let addr: i32;
+        match labels.get(self.label.as_str()) {
+            Some(v) => addr = *v,
+            None => return Err(format_args!("label {} does not exist", self.label).to_string()),
+        }
+
+        ctx.registers[self.rd] = ctx.pc + 4;
+        ctx.pc = addr;
+        return Ok(());
+    }
 }
 
-fn i32(e: &Either<RegisterType, String>) -> Result<i32, String> {
-    return match e {
-        Right(s) => match s.parse::<i32>() {
-            Ok(n) => Ok(n),
-            Err(e) => Err(e.to_string()),
-        },
-        Left(_) => Err("not integer type".to_string()),
-    };
+#[derive(PartialEq, Debug)]
+pub struct Lui {
+    pub imm: i32,
+    pub rd: RegisterType,
 }
 
-fn string(e: &Either<RegisterType, String>) -> Result<String, String> {
-    return match e {
-        Right(s) => Ok(s.clone()),
-        Left(_) => Err("not integer type".to_string()),
-    };
+impl InstructionRunner for Lui {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = self.imm << 12;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Nop {}
+
+impl InstructionRunner for Nop {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Or {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Or {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] | ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Ori {
+    pub imm: i32,
+    pub rd: RegisterType,
+    pub rs: RegisterType,
+}
+
+impl InstructionRunner for Ori {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs] | self.imm;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Sll {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Sll {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] << ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Slli {
+    pub imm: i32,
+    pub rd: RegisterType,
+    pub rs: RegisterType,
+}
+
+impl InstructionRunner for Slli {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs] << self.imm;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Slt {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Slt {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
+            ctx.registers[self.rd] = 1
+        } else {
+            ctx.registers[self.rd] = 0
+        }
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Slti {
+    pub rd: RegisterType,
+    pub rs: RegisterType,
+    pub imm: i32,
+}
+
+impl InstructionRunner for Slti {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs] < self.imm {
+            ctx.registers[self.rd] = 1
+        } else {
+            ctx.registers[self.rd] = 0
+        }
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Sra {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Sra {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] >> ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Srai {
+    pub rd: RegisterType,
+    pub rs: RegisterType,
+    pub imm: i32,
+}
+
+impl InstructionRunner for Srai {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs] >> self.imm;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Srl {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Srl {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] >> ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Srli {
+    pub rd: RegisterType,
+    pub rs: RegisterType,
+    pub imm: i32,
+}
+
+impl InstructionRunner for Srli {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs] >> self.imm;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Sub {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Sub {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] - ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Xor {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Xor {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] ^ ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Xori {
+    pub imm: i32,
+    pub rd: RegisterType,
+    pub rs: RegisterType,
+}
+
+impl InstructionRunner for Xori {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs] ^ self.imm;
+        ctx.pc += 4;
+        return Ok(());
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -441,186 +442,143 @@ mod tests {
 
     #[test]
     fn test_runner() {
-        let instructions = vec![
-            Instruction {
-                instruction_type: InstructionType::ADDI,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::ZERO),
-                i3: Right("1".to_string()),
-            },
-            Instruction {
-                instruction_type: InstructionType::ADDI,
-                i1: Left(RegisterType::T1),
-                i2: Left(RegisterType::T0),
-                i3: Right("1".to_string()),
-            },
+        let instructions: Vec<Box<InstructionRunner>> = vec![
+            Box::new(Add {
+                rd: RegisterType::T0,
+                rs1: RegisterType::T1,
+                rs2: RegisterType::T2,
+            }),
+            Box::new(Add {
+                rd: RegisterType::T0,
+                rs1: RegisterType::T0,
+                rs2: RegisterType::T2,
+            }),
         ];
         let mut runner = Runner::new(instructions, HashMap::new());
+        runner.ctx.registers[RegisterType::T1] = 1;
+        runner.ctx.registers[RegisterType::T2] = 2;
         runner.run().unwrap();
-        assert_eq!(runner.ctx.registers[RegisterType::T1], 2);
+        assert_eq!(runner.ctx.registers[RegisterType::T0], 5);
     }
 
     #[test]
     fn test_add() {
-        let instruction = InstructionType::ADD;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
         ctx.registers[RegisterType::T2] = 2;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Add {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
     }
 
     #[test]
     fn test_addi() {
-        let instruction = InstructionType::ADDI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("1".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Addi {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 1,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 2);
     }
 
     #[test]
     fn test_and() {
-        let instruction = InstructionType::AND;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
         ctx.registers[RegisterType::T2] = 3;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = And {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_andi() {
-        let instruction = InstructionType::ANDI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("3".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Andi {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 3,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_auipc() {
-        let mut instructions = vec![
-            Instruction {
-                instruction_type: InstructionType::AUIPC,
-                i1: Left(RegisterType::T0),
-                i2: Right("0".to_string()),
-                i3: Right("".to_string()),
-            },
-            Instruction {
-                instruction_type: InstructionType::AUIPC,
-                i1: Left(RegisterType::T0),
-                i2: Right("0".to_string()),
-                i3: Right("".to_string()),
-            },
-            Instruction {
-                instruction_type: InstructionType::AUIPC,
-                i1: Left(RegisterType::T0),
-                i2: Right("0".to_string()),
-                i3: Right("".to_string()),
-            },
+        let mut instructions: Vec<Box<InstructionRunner>> = vec![
+            Box::new(Auipc {
+                rd: RegisterType::T0,
+                imm: 0,
+            }),
+            Box::new(Auipc {
+                rd: RegisterType::T0,
+                imm: 0,
+            }),
+            Box::new(Auipc {
+                rd: RegisterType::T0,
+                imm: 0,
+            }),
         ];
         let mut runner = Runner::new(instructions, HashMap::new());
         runner.run().unwrap();
         assert_eq!(runner.ctx.registers[RegisterType::T0], 8);
 
         instructions = vec![
-            Instruction {
-                instruction_type: InstructionType::AUIPC,
-                i1: Left(RegisterType::T0),
-                i2: Right("1".to_string()),
-                i3: Right("".to_string()),
-            },
-            Instruction {
-                instruction_type: InstructionType::AUIPC,
-                i1: Left(RegisterType::T0),
-                i2: Right("1".to_string()),
-                i3: Right("".to_string()),
-            },
-            Instruction {
-                instruction_type: InstructionType::AUIPC,
-                i1: Left(RegisterType::T0),
-                i2: Right("1".to_string()),
-                i3: Right("".to_string()),
-            },
+            Box::new(Auipc {
+                rd: RegisterType::T0,
+                imm: 1,
+            }),
+            Box::new(Auipc {
+                rd: RegisterType::T0,
+                imm: 1,
+            }),
+            Box::new(Auipc {
+                rd: RegisterType::T0,
+                imm: 1,
+            }),
         ];
-        runner = Runner::new(instructions, HashMap::new());
+        let mut runner = Runner::new(instructions, HashMap::new());
         runner.run().unwrap();
         assert_eq!(runner.ctx.registers[RegisterType::T0], 4104);
     }
 
     #[test]
     fn test_jal() {
-        let instructions = vec![
-            Instruction {
-                instruction_type: InstructionType::JAL,
-                i1: Left(RegisterType::T0),
-                i2: Right("foo".to_string()),
-                i3: Right("".to_string()),
-            },
-            Instruction {
-                instruction_type: InstructionType::ADDI,
-                i1: Left(RegisterType::T1),
-                i2: Left(RegisterType::ZERO),
-                i3: Right("1".to_string()),
-            },
-            Instruction {
-                instruction_type: InstructionType::ADDI,
-                i1: Left(RegisterType::T2),
-                i2: Left(RegisterType::ZERO),
-                i3: Right("2".to_string()),
-            },
+        let instructions: Vec<Box<InstructionRunner>> = vec![
+            Box::new(Jal {
+                rd: RegisterType::T0,
+                label: "foo".to_string(),
+            }),
+            Box::new(Addi {
+                rd: RegisterType::T1,
+                rs: RegisterType::ZERO,
+                imm: 1,
+            }),
+            Box::new(Addi {
+                rd: RegisterType::T2,
+                rs: RegisterType::ZERO,
+                imm: 2,
+            }),
         ];
         let mut labels = HashMap::new();
         labels.insert("foo".to_string(), 8);
+
         let mut runner = Runner::new(instructions, labels);
         runner.run().unwrap();
         assert_eq!(runner.ctx.registers[RegisterType::T0], 4);
@@ -630,327 +588,216 @@ mod tests {
 
     #[test]
     fn test_lui() {
-        let instruction = InstructionType::LUI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Right("0".to_string()),
-                i3: Right("".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Lui {
+            rd: RegisterType::T0,
+            imm: 0,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 0);
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Right("1".to_string()),
-                i3: Right("".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Lui {
+            rd: RegisterType::T0,
+            imm: 1,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4096);
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Right("3".to_string()),
-                i3: Right("".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Lui {
+            rd: RegisterType::T0,
+            imm: 3,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 12288);
     }
 
     #[test]
     fn test_or() {
-        let instruction = InstructionType::OR;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
         ctx.registers[RegisterType::T2] = 2;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Or {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
     }
 
     #[test]
     fn test_ori() {
-        let instruction = InstructionType::ORI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("2".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Ori {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 3);
     }
 
     #[test]
     fn test_sll() {
-        let instruction = InstructionType::SLL;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
         ctx.registers[RegisterType::T2] = 2;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Sll {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
     }
 
     #[test]
     fn test_slli() {
-        let instruction = InstructionType::SLLI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 1;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("2".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Slli {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
     }
 
     #[test]
     fn test_slt() {
-        let instruction = InstructionType::SLT;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 2;
         ctx.registers[RegisterType::T2] = 3;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Slt {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_slti() {
-        let instruction = InstructionType::SLTI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
-        ctx.registers[RegisterType::T1] = 1;
+        ctx.registers[RegisterType::T1] = 2;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("5".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Slti {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 5,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_sra() {
-        let instruction = InstructionType::SRA;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 2;
         ctx.registers[RegisterType::T2] = 1;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Sra {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_srai() {
-        let instruction = InstructionType::SRAI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 2;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("1".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Srai {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 1,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_srl() {
-        let instruction = InstructionType::SRL;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 4;
         ctx.registers[RegisterType::T2] = 2;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Srl {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_srli() {
-        let instruction = InstructionType::SRLI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 4;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("2".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Srli {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 1);
     }
 
     #[test]
     fn test_sub() {
-        let instruction = InstructionType::SUB;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 10;
         ctx.registers[RegisterType::T2] = 6;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Sub {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 4);
     }
 
     #[test]
     fn test_xor() {
-        let instruction = InstructionType::XOR;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 3;
         ctx.registers[RegisterType::T2] = 4;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Left(RegisterType::T2),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Xor {
+            rd: RegisterType::T0,
+            rs1: RegisterType::T1,
+            rs2: RegisterType::T2,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 7);
     }
 
     #[test]
     fn test_xori() {
-        let instruction = InstructionType::XORI;
-        let runner = Runner::get_runner(&instruction);
         let mut ctx = Context::new();
         ctx.registers[RegisterType::T1] = 3;
 
-        runner(
-            &mut ctx,
-            &Instruction {
-                instruction_type: instruction,
-                i1: Left(RegisterType::T0),
-                i2: Left(RegisterType::T1),
-                i3: Right("4".to_string()),
-            },
-            &HashMap::new(),
-        )
-        .unwrap();
+        let runner = Xori {
+            rd: RegisterType::T0,
+            rs: RegisterType::T1,
+            imm: 4,
+        };
+        runner.run(&mut ctx, &HashMap::new()).unwrap();
         assert_eq!(ctx.registers[RegisterType::T0], 7);
     }
 }
