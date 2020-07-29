@@ -70,6 +70,28 @@ pub fn parse(s: String) -> Result<Application, String> {
                     label,
                 })
             }
+            "bge" | "bgeu" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let label = elements[2].trim().to_string();
+                Box::new(Bge {
+                    rs1: rd,
+                    rs2: rs,
+                    label,
+                })
+            }
+            "blt" | "bltu" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let label = elements[2].trim().to_string();
+                Box::new(Blt {
+                    rs1: rd,
+                    rs2: rs,
+                    label,
+                })
+            }
             "bne" => {
                 validate_args(3, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
@@ -129,7 +151,7 @@ pub fn parse(s: String) -> Result<Application, String> {
                 let imm = i32(elements[2].trim().to_string())?;
                 Box::new(Slli { rd, rs, imm })
             }
-            "slt" => {
+            "slt" | "sltu" => {
                 validate_args(3, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
                 let rs1 = parse_register(elements[1].trim().to_string())?;
@@ -137,13 +159,6 @@ pub fn parse(s: String) -> Result<Application, String> {
                 Box::new(Slt { rd, rs1, rs2 })
             }
             "slti" => {
-                validate_args(3, &elements, remaining_line)?;
-                let rd = parse_register(elements[0].trim().to_string())?;
-                let rs = parse_register(elements[1].trim().to_string())?;
-                let imm = i32(elements[2].trim().to_string())?;
-                Box::new(Slti { rd, rs, imm })
-            }
-            "sltu" => {
                 validate_args(3, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
                 let rs = parse_register(elements[1].trim().to_string())?;

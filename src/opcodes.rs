@@ -144,6 +144,75 @@ impl InstructionRunner for Beq {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Bge {
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+    pub label: String,
+}
+
+impl InstructionRunner for Bge {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] >= ctx.registers[self.rs2] {
+            let addr: i32;
+            match labels.get(self.label.as_str()) {
+                Some(v) => addr = *v,
+                None => return Err(format_args!("label {} does not exist", self.label).to_string()),
+            }
+            ctx.pc = addr;
+        } else {
+            ctx.pc += 4;
+        }
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Bgeu {
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+    pub label: String,
+}
+
+impl InstructionRunner for Bgeu {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] >= ctx.registers[self.rs2] {
+            let addr: i32;
+            match labels.get(self.label.as_str()) {
+                Some(v) => addr = *v,
+                None => return Err(format_args!("label {} does not exist", self.label).to_string()),
+            }
+            ctx.pc = addr;
+        } else {
+            ctx.pc += 4;
+        }
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Blt {
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+    pub label: String,
+}
+
+impl InstructionRunner for Blt {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
+            let addr: i32;
+            match labels.get(self.label.as_str()) {
+                Some(v) => addr = *v,
+                None => return Err(format_args!("label {} does not exist", self.label).to_string()),
+            }
+            ctx.pc = addr;
+        } else {
+            ctx.pc += 4;
+        }
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Bne {
     pub rs1: RegisterType,
     pub rs2: RegisterType,
@@ -314,25 +383,6 @@ pub struct Slti {
 impl InstructionRunner for Slti {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         if ctx.registers[self.rs] < self.imm {
-            ctx.registers[self.rd] = 1
-        } else {
-            ctx.registers[self.rd] = 0
-        }
-        ctx.pc += 4;
-        return Ok(());
-    }
-}
-
-#[derive(PartialEq, Debug)]
-pub struct Sltu {
-    pub rd: RegisterType,
-    pub rs1: RegisterType,
-    pub rs2: RegisterType,
-}
-
-impl InstructionRunner for Sltu {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
             ctx.registers[self.rd] = 1
         } else {
             ctx.registers[self.rd] = 0
@@ -593,6 +643,90 @@ mod tests {
     }
 
     #[test]
+    fn test_bge() {
+        assert(
+            HashMap::new(),
+            "bge t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+        );
+
+        assert(
+            map! {RegisterType::T1 => 10},
+            "bge t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+        );
+    }
+
+    #[test]
+    fn test_bgeu() {
+        assert(
+            HashMap::new(),
+            "bgeu t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+        );
+
+        assert(
+            map! {RegisterType::T1 => 10},
+            "bgeu t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+        );
+    }
+
+    #[test]
+    fn test_blt() {
+        assert(
+            HashMap::new(),
+            "blt t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+        );
+
+        assert(
+            map! {RegisterType::T1 => 10},
+            "blt t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+        );
+    }
+
+    #[test]
+    fn test_bltu() {
+        assert(
+            HashMap::new(),
+            "blt t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 2, RegisterType::T1 => 1},
+        );
+
+        assert(
+            map! {RegisterType::T1 => 10},
+            "blt t0, t1, foo
+            addi t0, zero, 2
+            foo:
+            addi t1, zero, 1",
+            map! {RegisterType::T0 => 0, RegisterType::T1 => 1},
+        );
+    }
+
+    #[test]
     fn test_bne() {
         assert(
             HashMap::new(),
@@ -701,6 +835,15 @@ mod tests {
         assert(
             map! {RegisterType::T1 => 2},
             "slti t0, t1, 5",
+            map! {RegisterType::T0 => 1},
+        );
+    }
+
+    #[test]
+    fn test_sltu() {
+        assert(
+            map! {RegisterType::T1 => 2,RegisterType::T2 => 3},
+            "sltu t0, t1, t2",
             map! {RegisterType::T0 => 1},
         );
     }
