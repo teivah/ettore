@@ -1,8 +1,7 @@
-use crate::opcodes::{Add, Instruction, InstructionRunner, InstructionType, RegisterType};
-use either::*;
+use crate::opcodes::{Add, InstructionRunner, RegisterType};
 
-fn parse(s: String) -> Result<Vec<Box<InstructionRunner>>, String> {
-    let mut instructions: Vec<Box<InstructionRunner>> = vec![];
+fn parse(s: String) -> Result<Vec<Box<dyn InstructionRunner>>, String> {
+    let mut instructions: Vec<Box<dyn InstructionRunner>> = vec![];
 
     for line in s.split("\n") {
         let trimmed_line = line.trim();
@@ -15,7 +14,7 @@ fn parse(s: String) -> Result<Vec<Box<InstructionRunner>>, String> {
         let instruction_type_string = &trimmed_line[..first_whitespace.unwrap()];
         let remaining_line = &trimmed_line[first_whitespace.unwrap() + 1..];
         let elements: Vec<&str> = remaining_line.split(',').collect();
-        let instruction: Box<InstructionRunner> = match instruction_type_string {
+        let instruction: Box<dyn InstructionRunner> = match instruction_type_string {
             "add" => {
                 let rd = parse_register(elements[0].trim().to_string())?;
                 let rs1 = parse_register(elements[1].trim().to_string())?;
@@ -92,30 +91,6 @@ fn parse(s: String) -> Result<Vec<Box<InstructionRunner>>, String> {
     return Ok(instructions);
 }
 
-fn register(e: &Either<RegisterType, String>) -> Result<&RegisterType, String> {
-    return match e {
-        Left(r) => return Ok(r),
-        Right(_) => Err("not register type".to_string()),
-    };
-}
-
-fn i32(e: &Either<RegisterType, String>) -> Result<i32, String> {
-    return match e {
-        Right(s) => match s.parse::<i32>() {
-            Ok(n) => Ok(n),
-            Err(e) => Err(e.to_string()),
-        },
-        Left(_) => Err("not integer type".to_string()),
-    };
-}
-
-fn string(e: &Either<RegisterType, String>) -> Result<String, String> {
-    return match e {
-        Right(s) => Ok(s.clone()),
-        Left(_) => Err("not integer type".to_string()),
-    };
-}
-
 fn parse_register(s: String) -> Result<RegisterType, String> {
     return match s.as_str() {
         "zero" => Ok(RegisterType::ZERO),
@@ -157,7 +132,6 @@ fn parse_register(s: String) -> Result<RegisterType, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::opcodes::{Instruction, InstructionType, RegisterType};
 
     #[test]
     fn test_parse() {

@@ -48,12 +48,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "either"
-version = "1.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
-
-[[package]]
 name = "enum-map"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -156,7 +150,6 @@ name = "vega"
 version = "0.1.0"
 dependencies = [
  "clap",
- "either",
  "enum-map",
 ]
 

@@ -1,6 +1,4 @@
-use either::*;
 use enum_map::{Enum, EnumMap};
-use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
 
 struct Runner {
@@ -366,40 +364,6 @@ impl InstructionRunner for Xori {
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub struct Instruction {
-    pub instruction_type: InstructionType,
-    pub i1: Either<RegisterType, String>,
-    pub i2: Either<RegisterType, String>,
-    pub i3: Either<RegisterType, String>,
-}
-
-#[derive(PartialEq, Debug, Enum, Clone, Copy)]
-pub enum InstructionType {
-    ADD,
-    ADDI,
-    AND,
-    ANDI,
-    AUIPC,
-    JAL,
-    LUI,
-    NOP,
-    OR,
-    ORI,
-    SLL,
-    SLLI,
-    SLT,
-    SLTI,
-    SLTU,
-    SRA,
-    SRAI,
-    SRL,
-    SRLI,
-    SUB,
-    XOR,
-    XORI,
-}
-
 #[derive(PartialEq, Debug, Enum, Clone, Copy)]
 pub enum RegisterType {
     ZERO,
@@ -442,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_runner() {
-        let instructions: Vec<Box<InstructionRunner>> = vec![
+        let instructions: Vec<Box<dyn InstructionRunner>> = vec![
             Box::new(Add {
                 rd: RegisterType::T0,
                 rs1: RegisterType::T1,
@@ -521,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_auipc() {
-        let mut instructions: Vec<Box<InstructionRunner>> = vec![
+        let mut instructions: Vec<Box<dyn InstructionRunner>> = vec![
             Box::new(Auipc {
                 rd: RegisterType::T0,
                 imm: 0,
@@ -560,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_jal() {
-        let instructions: Vec<Box<InstructionRunner>> = vec![
+        let instructions: Vec<Box<dyn InstructionRunner>> = vec![
             Box::new(Jal {
                 rd: RegisterType::T0,
                 label: "foo".to_string(),
