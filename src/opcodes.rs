@@ -1,6 +1,11 @@
 use enum_map::{Enum, EnumMap};
 use std::collections::HashMap;
 
+pub struct Application {
+    pub instructions: Vec<Box<dyn InstructionRunner>>,
+    pub labels: Vec<String>,
+}
+
 struct Runner {
     ctx: Context,
     instructions: Vec<Box<dyn InstructionRunner>>,
@@ -105,8 +110,8 @@ impl InstructionRunner for Andi {
 
 #[derive(PartialEq, Debug)]
 pub struct Auipc {
-    pub imm: i32,
     pub rd: RegisterType,
+    pub imm: i32,
 }
 
 impl InstructionRunner for Auipc {
@@ -139,8 +144,8 @@ impl InstructionRunner for Jal {
 
 #[derive(PartialEq, Debug)]
 pub struct Lui {
-    pub imm: i32,
     pub rd: RegisterType,
+    pub imm: i32,
 }
 
 impl InstructionRunner for Lui {
@@ -208,9 +213,9 @@ impl InstructionRunner for Sll {
 
 #[derive(PartialEq, Debug)]
 pub struct Slli {
-    pub imm: i32,
     pub rd: RegisterType,
     pub rs: RegisterType,
+    pub imm: i32,
 }
 
 impl InstructionRunner for Slli {
@@ -250,6 +255,25 @@ pub struct Slti {
 impl InstructionRunner for Slti {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         if ctx.registers[self.rs] < self.imm {
+            ctx.registers[self.rd] = 1
+        } else {
+            ctx.registers[self.rd] = 0
+        }
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Sltu {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Sltu {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
             ctx.registers[self.rd] = 1
         } else {
             ctx.registers[self.rd] = 0

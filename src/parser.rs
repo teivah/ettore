@@ -1,47 +1,173 @@
-use crate::opcodes::{Add, InstructionRunner, RegisterType};
+use crate::opcodes::*;
 
-fn parse(s: String) -> Result<Vec<Box<dyn InstructionRunner>>, String> {
+fn parse(s: String) -> Result<Application, String> {
     let mut instructions: Vec<Box<dyn InstructionRunner>> = vec![];
+    let mut labels: Vec<String> = vec![];
 
     for line in s.split("\n") {
         let trimmed_line = line.trim();
-        let first_whitespace = trimmed_line.find(' ');
-        if first_whitespace.is_none() {
-            return Err(format_args!("invalid line: {}", trimmed_line).to_string());
+        if trimmed_line.len() == 0 {
+            continue;
         }
 
-        // TODO parse labels
+        let first_whitespace = trimmed_line.find(' ');
+        let last_character = trimmed_line.chars().last().unwrap();
+        if first_whitespace.is_none() && last_character != ':' {
+            return Err(format_args!("invalid line: {}", trimmed_line).to_string());
+        } else if first_whitespace.is_none() && last_character == ':' {
+            labels.push(trimmed_line[..trimmed_line.len() - 1].to_string());
+            continue;
+        }
+
         let instruction_type_string = &trimmed_line[..first_whitespace.unwrap()];
         let remaining_line = &trimmed_line[first_whitespace.unwrap() + 1..];
         let elements: Vec<&str> = remaining_line.split(',').collect();
         let instruction: Box<dyn InstructionRunner> = match instruction_type_string {
             "add" => {
+                validate_args(3, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
                 let rs1 = parse_register(elements[1].trim().to_string())?;
                 let rs2 = parse_register(elements[2].trim().to_string())?;
                 Box::new(Add { rd, rs1, rs2 })
             }
-            // "addi" => InstructionType::ADDI,
-            // "and" => InstructionType::AND,
-            // "andi" => InstructionType::ANDI,
-            // "auipc" => InstructionType::AUIPC,
-            // "jal" => InstructionType::JAL,
-            // "lui" => InstructionType::LUI,
-            // "nop" => InstructionType::NOP,
-            // "or" => InstructionType::OR,
-            // "ori" => InstructionType::ORI,
-            // "sll" => InstructionType::SLL,
-            // "slli" => InstructionType::SLLI,
-            // "slt" => InstructionType::SLT,
-            // "slti" => InstructionType::SLTI,
-            // "sltu" => InstructionType::SLTU,
-            // "sra" => InstructionType::SRA,
-            // "srai" => InstructionType::SRAI,
-            // "srl" => InstructionType::SRL,
-            // "srli" => InstructionType::SRLI,
-            // "sub" => InstructionType::SUB,
-            // "xor" => InstructionType::XOR,
-            // "xori" => InstructionType::XORI,
+            "addi" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Addi { rd, rs, imm })
+            }
+            "and" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(And { rd, rs1, rs2 })
+            }
+            "andi" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Andi { rd, rs, imm })
+            }
+            "auipc" => {
+                validate_args(2, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let imm = i32(elements[1].trim().to_string())?;
+                Box::new(Auipc { rd, imm })
+            }
+            "jal" => {
+                validate_args(2, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let label = elements[1].trim().to_string();
+                Box::new(Jal { rd, label })
+            }
+            "lui" => {
+                validate_args(2, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let imm = i32(elements[1].trim().to_string())?;
+                Box::new(Lui { rd, imm })
+            }
+            "nop" => Box::new(Nop {}),
+            "or" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Or { rd, rs1, rs2 })
+            }
+            "ori" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Ori { rd, rs, imm })
+            }
+            "sll" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Sll { rd, rs1, rs2 })
+            }
+            "slli" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Slli { rd, rs, imm })
+            }
+            "slt" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Slt { rd, rs1, rs2 })
+            }
+            "slti" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Slti { rd, rs, imm })
+            }
+            "sltu" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Slti { rd, rs, imm })
+            }
+            "sra" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Sra { rd, rs1, rs2 })
+            }
+            "srai" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Srai { rd, rs, imm })
+            }
+            "srl" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Srl { rd, rs1, rs2 })
+            }
+            "srli" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Srli { rd, rs, imm })
+            }
+            "sub" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Sub { rd, rs1, rs2 })
+            }
+            "xor" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Xor { rd, rs1, rs2 })
+            }
+            "xori" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs = parse_register(elements[1].trim().to_string())?;
+                let imm = i32(elements[2].trim().to_string())?;
+                Box::new(Xori { rd, rs, imm })
+            }
             _ => {
                 return Err(
                     format_args!("invalid instruction type: {}", instruction_type_string)
@@ -50,45 +176,33 @@ fn parse(s: String) -> Result<Vec<Box<dyn InstructionRunner>>, String> {
             }
         };
         instructions.push(instruction);
-
-        // let remaining_line = &trimmed_line[first_whitespace.unwrap() + 1..];
-        // let elements: Vec<&str> = remaining_line.split(',').collect();
-        // if elements.len() <= 1 {
-        //     return Err(format_args!("missing elements: {}", remaining_line).to_string());
-        // }
-        //
-        // if elements.len() == 0 {
-        //     instructions.push(Instruction {
-        //         instruction_type,
-        //         i1: Right("".to_string()),
-        //         i2: Right("".to_string()),
-        //         i3: Right("".to_string()),
-        //     })
-        // } else if elements.len() == 1 {
-        //     instructions.push(Instruction {
-        //         instruction_type,
-        //         i1: parse_input(elements[0].trim().to_string()),
-        //         i2: Right("".to_string()),
-        //         i3: Right("".to_string()),
-        //     })
-        // } else if elements.len() == 2 {
-        //     instructions.push(Instruction {
-        //         instruction_type,
-        //         i1: parse_input(elements[0].trim().to_string()),
-        //         i2: parse_input(elements[1].trim().to_string()),
-        //         i3: Right("".to_string()),
-        //     })
-        // } else {
-        //     instructions.push(Instruction {
-        //         instruction_type,
-        //         i1: parse_input(elements[0].trim().to_string()),
-        //         i2: parse_input(elements[1].trim().to_string()),
-        //         i3: parse_input(elements[2].trim().to_string()),
-        //     })
-        // }
     }
 
-    return Ok(instructions);
+    return Ok(Application {
+        instructions,
+        labels,
+    });
+}
+
+fn validate_args(expected: usize, args: &Vec<&str>, line: &str) -> Result<(), String> {
+    if args.len() == expected {
+        return Ok(());
+    }
+
+    return Err(format_args!(
+        "invalid line expected {} arguments, got {}: {}",
+        expected,
+        args.len(),
+        line
+    )
+    .to_string());
+}
+
+fn i32(s: String) -> Result<i32, String> {
+    return match s.parse::<i32>() {
+        Ok(n) => Ok(n),
+        Err(e) => Err(e.to_string()),
+    };
 }
 
 fn parse_register(s: String) -> Result<RegisterType, String> {
@@ -135,26 +249,16 @@ mod tests {
 
     #[test]
     fn test_parse() {
-        //         let result = parse(
-        //             "addi t0, zero, 10
-        // slti t1, t0, 11
-        // lui t2, 3"
-        //                 .to_string(),
-        //         );
         let result = parse(
-            "add t0, t1, t2
-add t1, t2, t0"
+            "    jal t0, foo
+    addi t1, zero, 1
+foo:
+    addi t2, zero, 2"
                 .to_string(),
         );
-        let instructions = result.unwrap();
-        assert_eq!(2, instructions.len());
-        // assert_eq!(
-        //     instructions[1],
-        //     Add {
-        //         rd: RegisterType::T1,
-        //         rs1: RegisterType::T2,
-        //         rs2: RegisterType::T0
-        //     }
-        // );
+        let application = result.unwrap();
+        assert_eq!(3, application.instructions.len());
+        assert_eq!(1, application.labels.len());
+        assert_eq!("foo", application.labels[0]);
     }
 }
