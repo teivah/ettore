@@ -424,6 +424,21 @@ impl InstructionRunner for Ori {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Rem {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Rem {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] % ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Sb {
     pub rs2: RegisterType,
     pub offset: i32,
@@ -1128,6 +1143,27 @@ SB $t0, 12($sp)
             HashMap::new(),
             "ori t0, t1, 2",
             map! {RegisterType::T0 => 3},
+            HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn rem() {
+        assert(
+            map! {RegisterType::T1 => 4, RegisterType::T2 => 2},
+            0,
+            HashMap::new(),
+            "rem t0, t1, t2",
+            map! {RegisterType::T0 => 0},
+            HashMap::new(),
+        );
+
+        assert(
+            map! {RegisterType::T1 => 4, RegisterType::T2 => 3},
+            0,
+            HashMap::new(),
+            "rem t0, t1, t2",
+            map! {RegisterType::T0 => 1},
             HashMap::new(),
         );
     }

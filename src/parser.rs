@@ -182,6 +182,13 @@ pub fn parse(s: String) -> Result<Application, String> {
                 let imm = i32(elements[2].trim().to_string())?;
                 Box::new(Ori { rd, rs, imm })
             }
+            "rem" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Rem { rd, rs1, rs2 })
+            }
             "sb" => {
                 validate_args_interval(2, 3, &elements, remaining_line)?;
                 if elements.len() == 2 {
