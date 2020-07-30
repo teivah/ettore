@@ -15,14 +15,15 @@ impl VirtualMachine for Mvm2 {
         let mut l1_max = -1;
 
         while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
-            let fetch = Self::fetch_instruction(&self.ctx, &self.application, l1_min, l1_max);
+            let fetch = self.fetch_instruction(l1_min, l1_max);
             cycles += fetch.1;
+            let runner = &self.application.instructions[fetch.0];
             l1_min = fetch.2;
             l1_max = fetch.3;
 
-            let decode = Self::decode(fetch.0);
+            let decode = self.decode(runner);
             cycles += decode.1;
-            let ew = Self::execute_write(&mut self.ctx, &self.application.labels, fetch.0)?;
+            let ew = Self::execute_write(&mut self.ctx, &self.application.labels, runner)?;
             cycles += ew;
         }
 
@@ -41,30 +42,20 @@ impl Mvm2 {
         }
     }
 
-    fn fetch_instruction<'a>(
-        ctx: &Context,
-        application: &'a Application,
-        l1_min: i32,
-        l2_min: i32,
-    ) -> (&'a Box<dyn InstructionRunner>, i64, i32, i32) {
-        if ctx.pc >= l1_min && ctx.pc <= l2_min {
-            return (
-                &application.instructions[(ctx.pc / 4) as usize],
-                1,
-                l1_min,
-                l2_min,
-            );
+    fn fetch_instruction<'a>(&self, l1_min: i32, l2_min: i32) -> (usize, i64, i32, i32) {
+        if self.ctx.pc >= l1_min && self.ctx.pc <= l2_min {
+            return ((self.ctx.pc / 4) as usize, 1, l1_min, l2_min);
         }
 
         return (
-            &application.instructions[(ctx.pc / 4) as usize],
+            (self.ctx.pc / 4) as usize,
             50,
-            ctx.pc,
-            ctx.pc + 64,
+            self.ctx.pc,
+            self.ctx.pc + 64,
         );
     }
 
-    fn decode(runner: &Box<dyn InstructionRunner>) -> (InstructionType, i64) {
+    fn decode(&self, runner: &Box<dyn InstructionRunner>) -> (InstructionType, i64) {
         (runner.instruction_type(), 1)
     }
 

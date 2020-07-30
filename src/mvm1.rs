@@ -12,11 +12,12 @@ impl VirtualMachine for Mvm1 {
     fn run(&mut self) -> Result<(), String> {
         let mut cycles: i64 = 0;
         while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
-            let fetch = Self::fetch_instruction(&self.ctx, &self.application);
+            let fetch = self.fetch_instruction();
+            let runner = &self.application.instructions[fetch.0];
             cycles += fetch.1;
-            let decode = Self::decode(fetch.0);
+            let decode = self.decode(runner);
             cycles += decode.1;
-            let ew = Self::execute_write(&mut self.ctx, &self.application.labels, fetch.0)?;
+            let ew = Self::execute_write(&mut self.ctx, &self.application.labels, runner)?;
             cycles += ew;
         }
         let s = cycles as f64 / I5_7360U as f64;
@@ -34,14 +35,11 @@ impl Mvm1 {
         }
     }
 
-    fn fetch_instruction<'a>(
-        ctx: &Context,
-        application: &'a Application,
-    ) -> (&'a Box<dyn InstructionRunner>, i64) {
-        (&application.instructions[(ctx.pc / 4) as usize], 50)
+    fn fetch_instruction<'a>(&self) -> (usize, i64) {
+        ((self.ctx.pc / 4) as usize, 50)
     }
 
-    fn decode(runner: &Box<dyn InstructionRunner>) -> (InstructionType, i64) {
+    fn decode(&self, runner: &Box<dyn InstructionRunner>) -> (InstructionType, i64) {
         (runner.instruction_type(), 1)
     }
 
