@@ -9,6 +9,8 @@
 MVM-1 is the first virtual machine implementation.
 It does not implement any of the known CPU optimizations like pipelining, out-of-order execution, multiple execution units, etc.
 
+Here is the architecture, divided in 4 classic stages:
+
 ```
    +-------+
    | Fetch |
@@ -38,7 +40,7 @@ MVM-1 is the starting point to build more advanced virtual machines.
 
 ## Benchmarks
 
-### Is Prime
+### Is Prime Number
 
 RISC source: [prime-number.asm](res/risc/prime-number.asm)
 
