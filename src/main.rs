@@ -5,7 +5,7 @@ mod parser;
 // use clap::{App as ClapApp, Arg};
 
 fn main() {
-    // let args = ClapApp::new("vega")
+    // let args = ClapApp::new("majorana")
     //     .arg(
     //         Arg::with_name("file")
     //             .short("f")

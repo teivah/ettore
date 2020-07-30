@@ -1,5 +1,5 @@
 [package]
-name = "vega"
+name = "majorana"
 version = "0.1.0"
 authors = ["teivah"]
 edition = "2018"
