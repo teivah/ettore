@@ -25,7 +25,6 @@ It does not implement any of the known CPU optimizations like pipelining, out-of
 |  +---------+  |
 |  | Execute |  |
 |  +---------+  |
-|               |
 +------+--------+
        |
        |
@@ -43,7 +42,7 @@ MVM-1 is the starting point to build more advanced virtual machines.
 
 RISC source: [prime-number.asm](res/risc/prime-number.asm)
 
-|Machine|1109|
+|Machine|n=1109|
 |:--------:|:-------------:|
 |i5-7360U|253 ns|
 |MVM-1|64033 ns|
