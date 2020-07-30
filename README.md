@@ -33,10 +33,38 @@ Here is the architecture, divided in 4 classic stages:
    +---v---+
    | Write |
    +-------+
-
 ```
 
 MVM-1 is the starting point to build more advanced virtual machines.
+
+## MVM-2
+
+Compared to MVM-1, we add a first level of instructions caching called L1I (Level 1 Instructions): 
+
+```
+   +-------+     +-----+
+   | Fetch +-----> L1I |
+   +---+---+     +-----+
+       |
+       |
+   +---v----+
+   | Decode |
+   +---+----+
+       |
+       |
++------v--------+
+|     ALU       |
+|  +---------+  |
+|  | Execute |  |
+|  +---------+  |
++---------------+
+       |
+       |
+   +---v---+
+   | Write |
+   +-------+
+
+```
 
 ## Benchmarks
 
@@ -48,3 +76,4 @@ RISC source: [prime-number.asm](res/risc/prime-number.asm)
 |:--------:|:-------------:|
 |i5-7360U|253 ns|
 |MVM-1|64033 ns|
+|MVM-2|4914 ns|

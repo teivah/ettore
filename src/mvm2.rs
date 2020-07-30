@@ -3,22 +3,29 @@ use crate::{VirtualMachine, I5_7360U, SECOND_TO_NANOSECOND};
 use std::collections::HashMap;
 use std::fs;
 
-struct Mvm1 {
+struct Mvm2 {
     ctx: Context,
     application: Application,
 }
 
-impl VirtualMachine for Mvm1 {
+impl VirtualMachine for Mvm2 {
     fn run(&mut self) -> Result<(), String> {
         let mut cycles: i64 = 0;
+        let mut l1_min = -1;
+        let mut l1_max = -1;
+
         while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
-            let fetch = Self::fetch_instruction(&self.ctx, &self.application);
+            let fetch = Self::fetch_instruction(&self.ctx, &self.application, l1_min, l1_max);
             cycles += fetch.1;
+            l1_min = fetch.2;
+            l1_max = fetch.3;
+
             let decode = Self::decode(fetch.0);
             cycles += decode.1;
             let ew = Self::execute_write(&mut self.ctx, &self.application.labels, fetch.0)?;
             cycles += ew;
         }
+
         let s = cycles as f64 / I5_7360U as f64;
         let ns = s * SECOND_TO_NANOSECOND as f64;
         println!("{} cycles, {} seconds, {} nanoseconds", cycles, s, ns);
@@ -26,9 +33,9 @@ impl VirtualMachine for Mvm1 {
     }
 }
 
-impl Mvm1 {
+impl Mvm2 {
     fn new(application: Application, memory_bytes: usize) -> Self {
-        Mvm1 {
+        Mvm2 {
             ctx: Context::new(memory_bytes),
             application,
         }
@@ -37,8 +44,24 @@ impl Mvm1 {
     fn fetch_instruction<'a>(
         ctx: &Context,
         application: &'a Application,
-    ) -> (&'a Box<dyn InstructionRunner>, i64) {
-        (&application.instructions[(ctx.pc / 4) as usize], 50)
+        l1_min: i32,
+        l2_min: i32,
+    ) -> (&'a Box<dyn InstructionRunner>, i64, i32, i32) {
+        if ctx.pc >= l1_min && ctx.pc <= l2_min {
+            return (
+                &application.instructions[(ctx.pc / 4) as usize],
+                1,
+                l1_min,
+                l2_min,
+            );
+        }
+
+        return (
+            &application.instructions[(ctx.pc / 4) as usize],
+            50,
+            ctx.pc,
+            ctx.pc + 64,
+        );
     }
 
     fn decode(runner: &Box<dyn InstructionRunner>) -> (InstructionType, i64) {
@@ -124,7 +147,7 @@ mod tests {
         assertions_memory: HashMap<usize, i8>,
     ) {
         let application = parse(instructions.to_string()).unwrap();
-        let mut runner = Mvm1::new(application, memory_bytes);
+        let mut runner = Mvm2::new(application, memory_bytes);
         for register in init_registers {
             runner.ctx.registers[register.0] = register.1;
         }
