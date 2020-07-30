@@ -26,6 +26,7 @@ impl Context {
 
 pub trait InstructionRunner {
     fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String>;
+    fn instruction_type(&self) -> InstructionType;
 }
 
 #[derive(PartialEq, Debug)]
@@ -45,6 +46,10 @@ impl InstructionRunner for Add {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::ADD
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -59,6 +64,10 @@ impl InstructionRunner for Addi {
         set_register(ctx, self.rd, ctx.registers[self.rs] + self.imm);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::ADDI
     }
 }
 
@@ -79,6 +88,10 @@ impl InstructionRunner for And {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::AND
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -94,6 +107,10 @@ impl InstructionRunner for Andi {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::ANDI
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -107,6 +124,10 @@ impl InstructionRunner for Auipc {
         set_register(ctx, self.rd, ctx.pc + (self.imm << 12));
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::AUIPC
     }
 }
 
@@ -131,6 +152,10 @@ impl InstructionRunner for Beq {
         }
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::BEQ
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -153,6 +178,10 @@ impl InstructionRunner for Bge {
             ctx.pc += 4;
         }
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::BGE
     }
 }
 
@@ -177,6 +206,10 @@ impl InstructionRunner for Bgeu {
         }
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::BGEU
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -199,6 +232,37 @@ impl InstructionRunner for Blt {
             ctx.pc += 4;
         }
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::BLT
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Bltu {
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+    pub label: String,
+}
+
+impl InstructionRunner for Bltu {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
+            let addr: i32;
+            match labels.get(self.label.as_str()) {
+                Some(v) => addr = *v,
+                None => return Err(format_args!("label {} does not exist", self.label).to_string()),
+            }
+            ctx.pc = addr;
+        } else {
+            ctx.pc += 4;
+        }
+        return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::BLTU
     }
 }
 
@@ -223,6 +287,10 @@ impl InstructionRunner for Bne {
         }
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::BNE
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -241,6 +309,10 @@ impl InstructionRunner for Div {
         );
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::DIV
     }
 }
 
@@ -262,6 +334,10 @@ impl InstructionRunner for Jal {
         ctx.pc = addr;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::JAL
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -277,6 +353,10 @@ impl InstructionRunner for Jalr {
         ctx.pc = ctx.registers[self.rs] + self.imm;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::JALR
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -290,6 +370,10 @@ impl InstructionRunner for Lui {
         set_register(ctx, self.rd, self.imm << 12);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::LUI
     }
 }
 
@@ -308,6 +392,10 @@ impl InstructionRunner for Lb {
         set_register(ctx, self.rs2, n as i32);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::LB
     }
 }
 
@@ -330,6 +418,10 @@ impl InstructionRunner for Lh {
 
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::LH
     }
 }
 
@@ -356,6 +448,10 @@ impl InstructionRunner for Lw {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::LW
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -365,6 +461,10 @@ impl InstructionRunner for Nop {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::NOP
     }
 }
 
@@ -385,6 +485,10 @@ impl InstructionRunner for Mul {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::MUL
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -404,6 +508,10 @@ impl InstructionRunner for Or {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::OR
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -418,6 +526,10 @@ impl InstructionRunner for Ori {
         set_register(ctx, self.rd, ctx.registers[self.rs] | self.imm);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::ORI
     }
 }
 
@@ -438,6 +550,10 @@ impl InstructionRunner for Rem {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::REM
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -454,6 +570,10 @@ impl InstructionRunner for Sb {
         ctx.memory[idx as usize] = n as i8;
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SB
     }
 }
 
@@ -475,6 +595,10 @@ impl InstructionRunner for Sh {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SH
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -494,6 +618,10 @@ impl InstructionRunner for Sll {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SLL
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -508,6 +636,10 @@ impl InstructionRunner for Slli {
         set_register(ctx, self.rd, ctx.registers[self.rs] << self.imm);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SLLI
     }
 }
 
@@ -528,6 +660,33 @@ impl InstructionRunner for Slt {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SLT
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Sltu {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Sltu {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
+            set_register(ctx, self.rd, 1);
+        } else {
+            set_register(ctx, self.rd, 0);
+        }
+        ctx.pc += 4;
+        return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SLTU
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -546,6 +705,10 @@ impl InstructionRunner for Slti {
         }
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SLTI
     }
 }
 
@@ -566,6 +729,10 @@ impl InstructionRunner for Sra {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SRA
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -580,6 +747,10 @@ impl InstructionRunner for Srai {
         set_register(ctx, self.rd, ctx.registers[self.rs] >> self.imm);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SRAI
     }
 }
 
@@ -600,6 +771,10 @@ impl InstructionRunner for Srl {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SRL
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -614,6 +789,10 @@ impl InstructionRunner for Srli {
         set_register(ctx, self.rd, ctx.registers[self.rs] >> self.imm);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SRLI
     }
 }
 
@@ -633,6 +812,10 @@ impl InstructionRunner for Sub {
         );
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SUB
     }
 }
 
@@ -658,6 +841,10 @@ impl InstructionRunner for Sw {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::SW
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -677,6 +864,10 @@ impl InstructionRunner for Xor {
         ctx.pc += 4;
         return Ok(());
     }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::XOR
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -691,6 +882,10 @@ impl InstructionRunner for Xori {
         set_register(ctx, self.rd, ctx.registers[self.rs] ^ self.imm);
         ctx.pc += 4;
         return Ok(());
+    }
+
+    fn instruction_type(&self) -> InstructionType {
+        InstructionType::XORI
     }
 }
 
@@ -735,6 +930,47 @@ pub enum RegisterType {
     T4,
     T5,
     T6,
+}
+
+pub enum InstructionType {
+    ADD,
+    ADDI,
+    AND,
+    ANDI,
+    AUIPC,
+    BEQ,
+    BGE,
+    BGEU,
+    BLT,
+    BLTU,
+    BNE,
+    DIV,
+    JAL,
+    JALR,
+    LUI,
+    LB,
+    LH,
+    LW,
+    NOP,
+    MUL,
+    OR,
+    ORI,
+    REM,
+    SB,
+    SH,
+    SLL,
+    SLLI,
+    SLT,
+    SLTU,
+    SLTI,
+    SRA,
+    SRAI,
+    SRL,
+    SRLI,
+    SUB,
+    SW,
+    XOR,
+    XORI,
 }
 
 struct Runner {
