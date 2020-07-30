@@ -6,20 +6,18 @@ use std::fs;
 struct Mvm2 {
     ctx: Context,
     application: Application,
+    l1_min: i32,
+    l1_max: i32,
 }
 
 impl VirtualMachine for Mvm2 {
     fn run(&mut self) -> Result<(), String> {
         let mut cycles: i64 = 0;
-        let mut l1_min = -1;
-        let mut l1_max = -1;
 
         while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
-            let fetch = self.fetch_instruction(l1_min, l1_max);
+            let fetch = self.fetch_instruction();
             cycles += fetch.1;
             let runner = &self.application.instructions[fetch.0];
-            l1_min = fetch.2;
-            l1_max = fetch.3;
 
             let decode = self.decode(runner);
             cycles += decode.1;
@@ -39,20 +37,19 @@ impl Mvm2 {
         Mvm2 {
             ctx: Context::new(memory_bytes),
             application,
+            l1_min: -1,
+            l1_max: -1,
         }
     }
 
-    fn fetch_instruction<'a>(&self, l1_min: i32, l2_min: i32) -> (usize, i64, i32, i32) {
-        if self.ctx.pc >= l1_min && self.ctx.pc <= l2_min {
-            return ((self.ctx.pc / 4) as usize, 1, l1_min, l2_min);
+    fn fetch_instruction<'a>(&mut self) -> (usize, i64) {
+        if self.ctx.pc >= self.l1_min && self.ctx.pc <= self.l1_max {
+            return ((self.ctx.pc / 4) as usize, 1);
         }
 
-        return (
-            (self.ctx.pc / 4) as usize,
-            50,
-            self.ctx.pc,
-            self.ctx.pc + 64,
-        );
+        self.l1_min = self.ctx.pc;
+        self.l1_max = self.ctx.pc + 64;
+        return ((self.ctx.pc / 4) as usize, 50);
     }
 
     fn decode(&self, runner: &Box<dyn InstructionRunner>) -> (InstructionType, i64) {
