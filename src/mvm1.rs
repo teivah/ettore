@@ -5,50 +5,46 @@ use std::fs;
 
 struct Mvm1 {
     ctx: Context,
-    application: Application,
-}
-
-impl VirtualMachine for Mvm1 {
-    fn run(&mut self) -> Result<(), String> {
-        let mut cycles: i64 = 0;
-        while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
-            let fetch = self.fetch_instruction();
-            let runner = &self.application.instructions[fetch.0];
-            cycles += fetch.1;
-            let decode = self.decode(runner);
-            cycles += decode.1;
-            let ew = Self::execute_write(&mut self.ctx, &self.application.labels, runner)?;
-            cycles += ew;
-        }
-        let s = cycles as f64 / I5_7360U as f64;
-        let ns = s * SECOND_TO_NANOSECOND as f64;
-        println!("{} cycles, {} seconds, {} nanoseconds", cycles, s, ns);
-        return Ok(());
-    }
+    cycles: i64,
 }
 
 impl Mvm1 {
-    fn new(application: Application, memory_bytes: usize) -> Self {
+    fn new(memory_bytes: usize) -> Self {
         Mvm1 {
             ctx: Context::new(memory_bytes),
-            application,
+            cycles: 0,
         }
     }
 
-    fn fetch_instruction<'a>(&self) -> (usize, i64) {
-        ((self.ctx.pc / 4) as usize, 50)
+    fn run(&mut self, application: &Application) -> Result<(), String> {
+        while self.ctx.pc / 4 < application.instructions.len() as i32 {
+            let idx = self.fetch_instruction();
+            let runner = &application.instructions[idx];
+            self.decode(runner);
+            self.execute_write(application, runner)?;
+        }
+        let s = self.cycles as f64 / I5_7360U as f64;
+        let ns = s * SECOND_TO_NANOSECOND as f64;
+        println!("{} cycles, {} seconds, {} nanoseconds", self.cycles, s, ns);
+        return Ok(());
     }
 
-    fn decode(&self, runner: &Box<dyn InstructionRunner>) -> (InstructionType, i64) {
-        (runner.instruction_type(), 1)
+    fn fetch_instruction(&mut self) -> usize {
+        self.cycles += 50;
+        (self.ctx.pc / 4) as usize
+    }
+
+    fn decode(&mut self, runner: &Box<dyn InstructionRunner>) -> InstructionType {
+        self.cycles += 1;
+        runner.instruction_type()
     }
 
     fn execute_write(
-        ctx: &mut Context,
-        labels: &HashMap<String, i32>,
+        &mut self,
+        application: &Application,
         runner: &Box<dyn InstructionRunner>,
-    ) -> Result<i64, String> {
-        runner.run(ctx, labels)?;
+    ) -> Result<(), String> {
+        runner.run(&mut self.ctx, &application.labels)?;
 
         let cycles = match runner.instruction_type() {
             InstructionType::ADD => 2,
@@ -90,7 +86,8 @@ impl Mvm1 {
             InstructionType::XOR => 2,
             InstructionType::XORI => 2,
         };
-        Ok(cycles)
+        self.cycles += cycles;
+        Ok(())
     }
 }
 
@@ -122,14 +119,14 @@ mod tests {
         assertions_memory: HashMap<usize, i8>,
     ) {
         let application = parse(instructions.to_string()).unwrap();
-        let mut runner = Mvm1::new(application, memory_bytes);
+        let mut runner = Mvm1::new(memory_bytes);
         for register in init_registers {
             runner.ctx.registers[register.0] = register.1;
         }
         for memory in init_memory {
             runner.ctx.memory[memory.0] = memory.1;
         }
-        runner.run().unwrap();
+        runner.run(&application).unwrap();
         for assertion in assertions_registers {
             assert_eq!(runner.ctx.registers[assertion.0], assertion.1);
         }
