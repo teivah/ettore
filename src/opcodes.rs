@@ -239,6 +239,21 @@ impl InstructionRunner for Bne {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Div {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Div {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] / ctx.registers[self.rs2];
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Jal {
     pub label: String,
     pub rd: RegisterType,
@@ -358,6 +373,21 @@ pub struct Nop {}
 
 impl InstructionRunner for Nop {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Mul {
+    pub rd: RegisterType,
+    pub rs1: RegisterType,
+    pub rs2: RegisterType,
+}
+
+impl InstructionRunner for Mul {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        ctx.registers[self.rd] = ctx.registers[self.rs1] * ctx.registers[self.rs2];
         ctx.pc += 4;
         return Ok(());
     }
@@ -985,6 +1015,27 @@ SB $t0, 12($sp)
     }
 
     #[test]
+    fn test_div() {
+        assert(
+            map! {RegisterType::T1 => 4, RegisterType::T2 => 2},
+            0,
+            HashMap::new(),
+            "div t0, t1, t2",
+            map! {RegisterType::T0 => 2},
+            HashMap::new(),
+        );
+
+        assert(
+            map! {RegisterType::T1 => 4, RegisterType::T2 => 3},
+            0,
+            HashMap::new(),
+            "div t0, t1, t2",
+            map! {RegisterType::T0 => 1},
+            HashMap::new(),
+        );
+    }
+
+    #[test]
     fn test_jal() {
         assert(
             HashMap::new(),
@@ -1041,6 +1092,18 @@ SB $t0, 12($sp)
             HashMap::new(),
             "lui t0, 3",
             map! {RegisterType::T0 => 12288},
+            HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn test_mul() {
+        assert(
+            map! {RegisterType::T1 => 4, RegisterType::T2 => 2},
+            0,
+            HashMap::new(),
+            "mul t0, t1, t2",
+            map! {RegisterType::T0 => 8},
             HashMap::new(),
         );
     }

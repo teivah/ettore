@@ -113,6 +113,13 @@ pub fn parse(s: String) -> Result<Application, String> {
                     label,
                 })
             }
+            "div" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Div { rd, rs1, rs2 })
+            }
             "jal" => {
                 validate_args(2, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
@@ -154,6 +161,13 @@ pub fn parse(s: String) -> Result<Application, String> {
                 Box::new(Lw { rs2, offset, rs1 })
             }
             "nop" => Box::new(Nop {}),
+            "mul" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rd = parse_register(elements[0].trim().to_string())?;
+                let rs1 = parse_register(elements[1].trim().to_string())?;
+                let rs2 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Mul { rd, rs1, rs2 })
+            }
             "or" => {
                 validate_args(3, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
