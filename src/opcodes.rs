@@ -1,3 +1,4 @@
+use crate::bit::*;
 use enum_map::{Enum, EnumMap};
 use std::collections::HashMap;
 
@@ -287,6 +288,72 @@ impl InstructionRunner for Lui {
 }
 
 #[derive(PartialEq, Debug)]
+pub struct Lb {
+    pub rs2: RegisterType,
+    pub offset: i32,
+    pub rs1: RegisterType,
+}
+
+impl InstructionRunner for Lb {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        let idx = ctx.registers[self.rs1] + self.offset;
+        let n = ctx.memory[idx as usize];
+        ctx.registers[self.rs2] = n as i32;
+
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Lh {
+    pub rs2: RegisterType,
+    pub offset: i32,
+    pub rs1: RegisterType,
+}
+
+impl InstructionRunner for Lh {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        let mut idx = ctx.registers[self.rs1] + self.offset;
+        let i1 = ctx.memory[idx as usize];
+        idx += 1;
+        let i2 = ctx.memory[idx as usize];
+
+        let n = i32_from_bytes(i1, i2, 0, 0);
+        ctx.registers[self.rs2] = n;
+
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Lw {
+    pub rs2: RegisterType,
+    pub offset: i32,
+    pub rs1: RegisterType,
+}
+
+impl InstructionRunner for Lw {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        let mut idx = ctx.registers[self.rs1] + self.offset;
+        let i1 = ctx.memory[idx as usize];
+        idx += 1;
+        let i2 = ctx.memory[idx as usize];
+        idx += 1;
+        let i3 = ctx.memory[idx as usize];
+        idx += 1;
+        let i4 = ctx.memory[idx as usize];
+
+        let n = i32_from_bytes(i1, i2, i3, i4);
+        ctx.registers[self.rs2] = n;
+
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
 pub struct Nop {}
 
 impl InstructionRunner for Nop {
@@ -321,6 +388,43 @@ pub struct Ori {
 impl InstructionRunner for Ori {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         ctx.registers[self.rd] = ctx.registers[self.rs] | self.imm;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Sb {
+    pub rs2: RegisterType,
+    pub offset: i32,
+    pub rs1: RegisterType,
+}
+
+impl InstructionRunner for Sb {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        let idx = ctx.registers[self.rs1] + self.offset;
+        let n = ctx.registers[self.rs2];
+        ctx.memory[idx as usize] = n as i8;
+        ctx.pc += 4;
+        return Ok(());
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Sh {
+    pub rs2: RegisterType,
+    pub offset: i32,
+    pub rs1: RegisterType,
+}
+
+impl InstructionRunner for Sh {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+        let mut idx = ctx.registers[self.rs1] + self.offset;
+        let n = ctx.registers[self.rs2];
+        let bytes = bytes_from_low_bits(n);
+        ctx.memory[idx as usize] = bytes.0;
+        idx += 1;
+        ctx.memory[idx as usize] = bytes.1;
         ctx.pc += 4;
         return Ok(());
     }
@@ -491,54 +595,6 @@ impl InstructionRunner for Sw {
         ctx.pc += 4;
         return Ok(());
     }
-}
-
-fn bytes_from_low_bits(n: i32) -> (i8, i8, i8, i8) {
-    let mut i1: i8 = 0;
-    let mut i2: i8 = 0;
-    let mut i3: i8 = 0;
-    let mut i4: i8 = 0;
-
-    let mut index: u8 = 0;
-    for i in 0..8 {
-        if get_bit(n, i) {
-            i1 = set_bit(i1, index);
-        }
-        index += 1;
-    }
-
-    index = 0;
-    for i in 8..16 {
-        if get_bit(n, i) {
-            i2 = set_bit(i2, index);
-        }
-        index += 1;
-    }
-
-    index = 0;
-    for i in 16..24 {
-        if get_bit(n, i) {
-            i3 = set_bit(i3, index);
-        }
-        index += 1;
-    }
-
-    index = 0;
-    for i in 24..32 {
-        if get_bit(n, i) {
-            i4 = set_bit(i4, index);
-        }
-        index += 1;
-    }
-
-    return (i1, i2, i3, i4);
-}
-
-fn get_bit(input: i32, n: u8) -> bool {
-    input & (1 << n) != 0
-}
-fn set_bit(n: i8, i: u8) -> i8 {
-    n | (1 << i)
 }
 
 #[derive(PartialEq, Debug)]
@@ -1090,23 +1146,61 @@ mod tests {
     }
 
     #[test]
-    fn test_sw() {
+    fn test_sb_lb() {
         assert(
-            map! {RegisterType::T0 => 258, RegisterType::T1 => 1},
+            map! {RegisterType::T0 => 16, RegisterType::T1 => 2},
             8,
-            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>1, 5=>1, 6=>1, 7=>1 },
-            "sw t0, 3, t1",
             HashMap::new(),
-            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>2, 5=>1, 6=>0, 7=>0 },
+            "sb t0, 2, t1
+            lb t2, 2, t1",
+            map! {RegisterType::T2 => 16},
+            map! { 4=>16},
+        );
+    }
+
+    #[test]
+    fn test_sh_lh() {
+        assert(
+            map! {RegisterType::T0 => 64, RegisterType::T1 => 2},
+            8,
+            map! { 4=>1, 5=>1},
+            "sh t0, 2, t1
+            lh t2, 2, t1",
+            map! {RegisterType::T2 => 64},
+            map! { 4=>64, 5=>0},
         );
 
         assert(
-            map! {RegisterType::T0 => 2047, RegisterType::T1 => 1},
+            map! {RegisterType::T0 => 2047, RegisterType::T1 => 2},
             8,
-            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>1, 5=>1, 6=>1, 7=>1 },
-            "sw t0, 3, t1",
-            HashMap::new(),
-            map! {0 => 1, 1 => 1, 2=>1, 3=>1, 4=>-1, 5=>7, 6=>0, 7=>0 },
+            map! { 4=>1, 5=>1},
+            "sh t0, 2, t1
+            lh t2, 2, t1",
+            map! {RegisterType::T2 => 2047},
+            map! { 4=>-1, 5=>7},
+        );
+    }
+
+    #[test]
+    fn test_sw_lw() {
+        assert(
+            map! {RegisterType::T0 => 258, RegisterType::T1 => 2},
+            8,
+            map! {4=>1, 5=>1, 6=>1, 7=>1 },
+            "sw t0, 2, t1
+            lw t2, 2, t1",
+            map! {RegisterType::T2 => 258},
+            map! {4=>2, 5=>1, 6=>0, 7=>0 },
+        );
+
+        assert(
+            map! {RegisterType::T0 => 2047, RegisterType::T1 => 2},
+            8,
+            map! { 4=>1, 5=>1, 6=>1, 7=>1 },
+            "sw t0, 2, t1
+            lw t2, 2, t1",
+            map! {RegisterType::T2 => 2047},
+            map! { 4=>-1, 5=>7, 6=>0, 7=>0 },
         );
     }
 

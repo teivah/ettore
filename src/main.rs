@@ -1,3 +1,4 @@
+mod bit;
 mod opcodes;
 mod parser;
 

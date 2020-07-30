@@ -122,6 +122,27 @@ pub fn parse(s: String) -> Result<Application, String> {
                 let imm = i32(elements[1].trim().to_string())?;
                 Box::new(Lui { rd, imm })
             }
+            "lb" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rs2 = parse_register(elements[0].trim().to_string())?;
+                let offset = i32(elements[1].trim().to_string())?;
+                let rs1 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Lb { rs2, offset, rs1 })
+            }
+            "lh" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rs2 = parse_register(elements[0].trim().to_string())?;
+                let offset = i32(elements[1].trim().to_string())?;
+                let rs1 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Lh { rs2, offset, rs1 })
+            }
+            "lw" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rs2 = parse_register(elements[0].trim().to_string())?;
+                let offset = i32(elements[1].trim().to_string())?;
+                let rs1 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Lw { rs2, offset, rs1 })
+            }
             "nop" => Box::new(Nop {}),
             "or" => {
                 validate_args(3, &elements, remaining_line)?;
@@ -136,6 +157,20 @@ pub fn parse(s: String) -> Result<Application, String> {
                 let rs = parse_register(elements[1].trim().to_string())?;
                 let imm = i32(elements[2].trim().to_string())?;
                 Box::new(Ori { rd, rs, imm })
+            }
+            "sb" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rs2 = parse_register(elements[0].trim().to_string())?;
+                let offset = i32(elements[1].trim().to_string())?;
+                let rs1 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Sb { rs2, offset, rs1 })
+            }
+            "sh" => {
+                validate_args(3, &elements, remaining_line)?;
+                let rs2 = parse_register(elements[0].trim().to_string())?;
+                let offset = i32(elements[1].trim().to_string())?;
+                let rs1 = parse_register(elements[2].trim().to_string())?;
+                Box::new(Sh { rs2, offset, rs1 })
             }
             "sll" => {
                 validate_args(3, &elements, remaining_line)?;
