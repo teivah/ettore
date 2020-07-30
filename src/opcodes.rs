@@ -58,7 +58,11 @@ pub struct Add {
 
 impl InstructionRunner for Add {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] + ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] + ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -73,7 +77,7 @@ pub struct Addi {
 
 impl InstructionRunner for Addi {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs] + self.imm;
+        set_register(ctx, self.rd, ctx.registers[self.rs] + self.imm);
         ctx.pc += 4;
         return Ok(());
     }
@@ -88,7 +92,11 @@ pub struct And {
 
 impl InstructionRunner for And {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] & ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] & ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -103,7 +111,7 @@ pub struct Andi {
 
 impl InstructionRunner for Andi {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs] & self.imm;
+        set_register(ctx, self.rd, ctx.registers[self.rs] & self.imm);
         ctx.pc += 4;
         return Ok(());
     }
@@ -117,7 +125,7 @@ pub struct Auipc {
 
 impl InstructionRunner for Auipc {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.pc + (self.imm << 12);
+        set_register(ctx, self.rd, ctx.pc + (self.imm << 12));
         ctx.pc += 4;
         return Ok(());
     }
@@ -247,7 +255,11 @@ pub struct Div {
 
 impl InstructionRunner for Div {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] / ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] / ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -267,7 +279,7 @@ impl InstructionRunner for Jal {
             None => return Err(format_args!("label {} does not exist", self.label).to_string()),
         }
 
-        ctx.registers[self.rd] = ctx.pc + 4;
+        set_register(ctx, self.rd, ctx.pc + 4);
         ctx.pc = addr;
         return Ok(());
     }
@@ -282,7 +294,7 @@ pub struct Jalr {
 
 impl InstructionRunner for Jalr {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.pc + 4;
+        set_register(ctx, self.rd, ctx.pc + 4);
         ctx.pc = ctx.registers[self.rs] + self.imm;
         return Ok(());
     }
@@ -296,7 +308,7 @@ pub struct Lui {
 
 impl InstructionRunner for Lui {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = self.imm << 12;
+        set_register(ctx, self.rd, self.imm << 12);
         ctx.pc += 4;
         return Ok(());
     }
@@ -313,8 +325,8 @@ impl InstructionRunner for Lb {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         let idx = ctx.registers[self.rs1] + self.offset;
         let n = ctx.memory[idx as usize];
-        ctx.registers[self.rs2] = n as i32;
 
+        set_register(ctx, self.rs2, n as i32);
         ctx.pc += 4;
         return Ok(());
     }
@@ -335,7 +347,7 @@ impl InstructionRunner for Lh {
         let i2 = ctx.memory[idx as usize];
 
         let n = i32_from_bytes(i1, i2, 0, 0);
-        ctx.registers[self.rs2] = n;
+        set_register(ctx, self.rs2, n);
 
         ctx.pc += 4;
         return Ok(());
@@ -361,8 +373,7 @@ impl InstructionRunner for Lw {
         let i4 = ctx.memory[idx as usize];
 
         let n = i32_from_bytes(i1, i2, i3, i4);
-        ctx.registers[self.rs2] = n;
-
+        set_register(ctx, self.rs2, n);
         ctx.pc += 4;
         return Ok(());
     }
@@ -387,7 +398,11 @@ pub struct Mul {
 
 impl InstructionRunner for Mul {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] * ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] * ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -402,7 +417,11 @@ pub struct Or {
 
 impl InstructionRunner for Or {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] | ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] | ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -417,7 +436,7 @@ pub struct Ori {
 
 impl InstructionRunner for Ori {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs] | self.imm;
+        set_register(ctx, self.rd, ctx.registers[self.rs] | self.imm);
         ctx.pc += 4;
         return Ok(());
     }
@@ -432,7 +451,11 @@ pub struct Rem {
 
 impl InstructionRunner for Rem {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] % ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] % ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -484,7 +507,11 @@ pub struct Sll {
 
 impl InstructionRunner for Sll {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] << ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] << ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -499,7 +526,7 @@ pub struct Slli {
 
 impl InstructionRunner for Slli {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs] << self.imm;
+        set_register(ctx, self.rd, ctx.registers[self.rs] << self.imm);
         ctx.pc += 4;
         return Ok(());
     }
@@ -515,9 +542,9 @@ pub struct Slt {
 impl InstructionRunner for Slt {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
-            ctx.registers[self.rd] = 1
+            set_register(ctx, self.rd, 1);
         } else {
-            ctx.registers[self.rd] = 0
+            set_register(ctx, self.rd, 0);
         }
         ctx.pc += 4;
         return Ok(());
@@ -534,9 +561,9 @@ pub struct Slti {
 impl InstructionRunner for Slti {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
         if ctx.registers[self.rs] < self.imm {
-            ctx.registers[self.rd] = 1
+            set_register(ctx, self.rd, 1);
         } else {
-            ctx.registers[self.rd] = 0
+            set_register(ctx, self.rd, 0);
         }
         ctx.pc += 4;
         return Ok(());
@@ -552,7 +579,11 @@ pub struct Sra {
 
 impl InstructionRunner for Sra {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] >> ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] >> ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -567,7 +598,7 @@ pub struct Srai {
 
 impl InstructionRunner for Srai {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs] >> self.imm;
+        set_register(ctx, self.rd, ctx.registers[self.rs] >> self.imm);
         ctx.pc += 4;
         return Ok(());
     }
@@ -582,7 +613,11 @@ pub struct Srl {
 
 impl InstructionRunner for Srl {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] >> ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] >> ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -597,7 +632,7 @@ pub struct Srli {
 
 impl InstructionRunner for Srli {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs] >> self.imm;
+        set_register(ctx, self.rd, ctx.registers[self.rs] >> self.imm);
         ctx.pc += 4;
         return Ok(());
     }
@@ -612,7 +647,11 @@ pub struct Sub {
 
 impl InstructionRunner for Sub {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] - ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] - ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -651,7 +690,11 @@ pub struct Xor {
 
 impl InstructionRunner for Xor {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs1] ^ ctx.registers[self.rs2];
+        set_register(
+            ctx,
+            self.rd,
+            ctx.registers[self.rs1] ^ ctx.registers[self.rs2],
+        );
         ctx.pc += 4;
         return Ok(());
     }
@@ -666,10 +709,17 @@ pub struct Xori {
 
 impl InstructionRunner for Xori {
     fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.registers[self.rd] = ctx.registers[self.rs] ^ self.imm;
+        set_register(ctx, self.rd, ctx.registers[self.rs] ^ self.imm);
         ctx.pc += 4;
         return Ok(());
     }
+}
+
+fn set_register(ctx: &mut Context, register: RegisterType, value: i32) {
+    if register == RegisterType::ZERO {
+        return;
+    }
+    ctx.registers[register] = value;
 }
 
 #[derive(PartialEq, Debug, Enum, Clone, Copy, Eq, Hash)]
@@ -791,6 +841,57 @@ SB $t0, 12($sp)
 #syscall 			# print to the log",
             HashMap::new(),
             HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn test_prime_number() {
+        let prime_number = "    addi t0, zero, 0 # Address of the word
+        lw t0, 0, t0 # Load word in memory
+    
+        # Compute max
+        addi t1, zero, 2
+        div t1, t0, t1
+        addi t1, t1, 1
+    
+        addi t2, zero, 2 # Counter init
+    
+    loop:
+        bge t2, t1, true # While loop
+        rem t3, t0, t2 # Modulo
+        beq t3, zero, false # If equals 0
+        addi t2, t2, 1 # Increment counter
+        jal zero, loop
+    
+    true:
+        addi t0, zero, 1
+        jal zero, end
+    
+    false:
+        addi t0, zero, 0
+        jal zero, end
+    
+    end:
+        addi t1, zero, 4
+        sb t0, 0, t1 # Store to address 4
+        addi a0, t1, 0";
+
+        assert(
+            HashMap::new(),
+            5,
+            map! {0 => 9},
+            prime_number,
+            map! {RegisterType::A0 => 4},
+            map! {4=>0},
+        );
+
+        assert(
+            HashMap::new(),
+            5,
+            map! {0 => 13},
+            prime_number,
+            map! {RegisterType::A0 => 4},
+            map! {4=>1},
         );
     }
 
@@ -1377,6 +1478,18 @@ SB $t0, 12($sp)
             HashMap::new(),
             "xori t0, t1, 4",
             map! {RegisterType::T0 => 7},
+            HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn test_zero() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi zero, zero, 1",
+            map! {RegisterType::ZERO => 0},
             HashMap::new(),
         );
     }
