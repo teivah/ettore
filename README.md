@@ -66,7 +66,11 @@ Compared to MVM-1, we add a first level of instructions caching called L1I (Leve
 
 ```
 
+The cache size is 64 bytes and is composed of a single cache line of 64 bytes.
+
 ## Benchmarks
+
+All the benchmarks are executed at a fixed CPU clock frequency: 2.3 GHz.
 
 ### Is Prime Number
 
