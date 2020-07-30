@@ -1156,6 +1156,16 @@ mod tests {
             map! {RegisterType::T2 => 16},
             map! { 4=>16},
         );
+
+        assert(
+            map! {RegisterType::T0 => 2047, RegisterType::T1 => 2},
+            8,
+            HashMap::new(),
+            "sb t0, 2, t1
+            lb t2, 2, t1",
+            map! {RegisterType::T2 => -1},
+            map! { 4=>-1},
+        );
     }
 
     #[test]
