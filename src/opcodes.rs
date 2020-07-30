@@ -1,42 +1,21 @@
 use crate::bit::*;
 use enum_map::{Enum, EnumMap};
 use std::collections::HashMap;
+use std::fs;
 
 pub struct Application {
     pub instructions: Vec<Box<dyn InstructionRunner>>,
     pub labels: HashMap<String, i32>,
 }
 
-struct Runner {
-    ctx: Context,
-    application: Application,
-}
-
-impl Runner {
-    fn new(application: Application, memory_bytes: usize) -> Self {
-        Runner {
-            ctx: Context::new(memory_bytes),
-            application,
-        }
-    }
-
-    fn run(&mut self) -> Result<(), String> {
-        while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
-            let runner = &self.application.instructions[(self.ctx.pc / 4) as usize];
-            runner.run(&mut self.ctx, &self.application.labels)?;
-        }
-        return Ok(());
-    }
-}
-
 pub struct Context {
-    registers: EnumMap<RegisterType, i32>,
-    memory: Vec<i8>,
-    pc: i32,
+    pub registers: EnumMap<RegisterType, i32>,
+    pub memory: Vec<i8>,
+    pub pc: i32,
 }
 
 impl Context {
-    fn new(memory_bytes: usize) -> Self {
+    pub fn new(memory_bytes: usize) -> Self {
         Context {
             registers: EnumMap::<RegisterType, i32>::new(),
             memory: vec![0; memory_bytes],
@@ -758,10 +737,33 @@ pub enum RegisterType {
     T6,
 }
 
+struct Runner {
+    ctx: Context,
+    application: Application,
+}
+
+impl Runner {
+    fn new(application: Application, memory_bytes: usize) -> Self {
+        Runner {
+            ctx: Context::new(memory_bytes),
+            application,
+        }
+    }
+
+    fn run(&mut self) -> Result<(), String> {
+        while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
+            let runner = &self.application.instructions[(self.ctx.pc / 4) as usize];
+            runner.run(&mut self.ctx, &self.application.labels)?;
+        }
+        return Ok(());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::parse;
+    use std::borrow::Borrow;
 
     macro_rules! map(
     { $($key:expr => $value:expr),+ } => {
@@ -801,86 +803,15 @@ mod tests {
     }
 
     #[test]
-    fn test_hello_world() {
-        assert(
-            map! {RegisterType::SP=> 13},
-            1024,
-            HashMap::new(),
-            "# Store 'Hello world!' at the top of the stack
-ADDI $sp, $sp, -13
-ADDI $t0, $zero, 72 # H
-SB $t0, 0($sp)
-ADDI $t0, $zero, 101 # e
-SB $t0, 1($sp)
-ADDI $t0, $zero, 108 # l
-SB $t0, 2($sp)
-ADDI $t0, $zero, 108 # l
-SB $t0, 3($sp)
-ADDI $t0, $zero, 111 # o
-SB $t0, 4($sp)
-ADDI $t0, $zero, 32 # (space)
-SB $t0, 5($sp)
-ADDI $t0, $zero, 119 # w
-SB $t0, 6($sp)
-ADDI $t0, $zero, 111 # o
-SB $t0, 7($sp)
-ADDI $t0, $zero, 114 # r
-SB $t0, 8($sp)
-ADDI $t0, $zero, 108 # l
-SB $t0, 9($sp)
-ADDI $t0, $zero, 100 # d
-SB $t0, 10($sp)
-ADDI $t0, $zero, 33 # !
-SB $t0, 11($sp)
-ADDI $t0, $zero, 0 # (null)
-SB $t0, 12($sp)
-
-# TODO
-# ADDI $v0, $zero, 4 # 4 is for print string
-# ADDI $a0, $sp, 0
-#syscall 			# print to the log",
-            HashMap::new(),
-            HashMap::new(),
-        );
-    }
-
-    #[test]
     fn test_prime_number() {
-        let prime_number = "    addi t0, zero, 0 # Address of the word
-        lw t0, 0, t0 # Load word in memory
-    
-        # Compute max
-        addi t1, zero, 2
-        div t1, t0, t1
-        addi t1, t1, 1
-    
-        addi t2, zero, 2 # Counter init
-    
-    loop:
-        bge t2, t1, true # While loop
-        rem t3, t0, t2 # Modulo
-        beq t3, zero, false # If equals 0
-        addi t2, t2, 1 # Increment counter
-        jal zero, loop
-    
-    true:
-        addi t0, zero, 1
-        jal zero, end
-    
-    false:
-        addi t0, zero, 0
-        jal zero, end
-    
-    end:
-        addi t1, zero, 4
-        sb t0, 0, t1 # Store to address 4
-        addi a0, t1, 0";
-
         assert(
             HashMap::new(),
             5,
             map! {0 => 9},
-            prime_number,
+            fs::read_to_string("res/risc/prime-number.asm")
+                .unwrap()
+                .as_str()
+                .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>0},
         );
@@ -889,7 +820,10 @@ SB $t0, 12($sp)
             HashMap::new(),
             5,
             map! {0 => 13},
-            prime_number,
+            fs::read_to_string("res/risc/prime-number.asm")
+                .unwrap()
+                .as_str()
+                .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>1},
         );

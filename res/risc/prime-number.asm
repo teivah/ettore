@@ -13,15 +13,15 @@ loop:
     rem t3, t0, t2 # Modulo
     beq t3, zero, false # If equals 0
     addi t2, t2, 1 # Increment counter
-    jal loop
+    jal zero, loop
 
 true:
     addi t0, zero, 1
-    jal end
+    jal zero, end
 
 false:
     addi t0, zero, 0
-    jal end
+    jal zero, end
 
 end:
     addi t1, zero, 4
