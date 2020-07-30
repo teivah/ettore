@@ -8,7 +8,7 @@ pub fn parse(s: String) -> Result<Application, String> {
 
     for line in s.split("\n") {
         let trimmed_line = line.trim();
-        if trimmed_line.len() == 0 {
+        if trimmed_line.len() == 0 || trimmed_line.chars().next().unwrap() == '#' {
             continue;
         }
 
@@ -21,10 +21,20 @@ pub fn parse(s: String) -> Result<Application, String> {
             continue;
         }
 
-        let instruction_type_string = &trimmed_line[..first_whitespace.unwrap()];
-        let remaining_line = &trimmed_line[first_whitespace.unwrap() + 1..];
+        let mut remaining_line = &trimmed_line[first_whitespace.unwrap() + 1..];
+        let comment = remaining_line.find('#');
+        match comment {
+            None => (),
+            Some(i) => remaining_line = &remaining_line[..i].trim(),
+        }
+
         let elements: Vec<&str> = remaining_line.split(',').collect();
-        let instruction: Box<dyn InstructionRunner> = match instruction_type_string {
+
+        let instruction: Box<dyn InstructionRunner> = match trimmed_line
+            [..first_whitespace.unwrap()]
+            .to_lowercase()
+            .as_str()
+        {
             "add" => {
                 validate_args(3, &elements, remaining_line)?;
                 let rd = parse_register(elements[0].trim().to_string())?;
@@ -159,11 +169,21 @@ pub fn parse(s: String) -> Result<Application, String> {
                 Box::new(Ori { rd, rs, imm })
             }
             "sb" => {
-                validate_args(3, &elements, remaining_line)?;
-                let rs2 = parse_register(elements[0].trim().to_string())?;
-                let offset = i32(elements[1].trim().to_string())?;
-                let rs1 = parse_register(elements[2].trim().to_string())?;
-                Box::new(Sb { rs2, offset, rs1 })
+                validate_args_interval(2, 3, &elements, remaining_line)?;
+                if elements.len() == 2 {
+                    let rs2 = parse_register(elements[0].trim().to_string())?;
+                    let imm_reg = parse_offset_reg(elements[1].to_string())?;
+                    Box::new(Sb {
+                        rs2,
+                        offset: imm_reg.0,
+                        rs1: imm_reg.1,
+                    })
+                } else {
+                    let rs2 = parse_register(elements[0].trim().to_string())?;
+                    let offset = i32(elements[1].trim().to_string())?;
+                    let rs1 = parse_register(elements[2].trim().to_string())?;
+                    Box::new(Sb { rs2, offset, rs1 })
+                }
             }
             "sh" => {
                 validate_args(3, &elements, remaining_line)?;
@@ -256,12 +276,7 @@ pub fn parse(s: String) -> Result<Application, String> {
                 let imm = i32(elements[2].trim().to_string())?;
                 Box::new(Xori { rd, rs, imm })
             }
-            _ => {
-                return Err(
-                    format_args!("invalid instruction type: {}", instruction_type_string)
-                        .to_string(),
-                )
-            }
+            _ => return Err(format_args!("invalid instruction type: {}", trimmed_line).to_string()),
         };
         instructions.push(instruction);
         pc += 4;
@@ -287,6 +302,26 @@ fn validate_args(expected: usize, args: &Vec<&str>, line: &str) -> Result<(), St
     .to_string());
 }
 
+fn validate_args_interval(
+    min: usize,
+    max: usize,
+    args: &Vec<&str>,
+    line: &str,
+) -> Result<(), String> {
+    if args.len() >= min && args.len() <= max {
+        return Ok(());
+    }
+
+    return Err(format_args!(
+        "invalid line expected between {} and {} arguments, got {}: {}",
+        min,
+        max,
+        args.len(),
+        line
+    )
+    .to_string());
+}
+
 fn i32(s: String) -> Result<i32, String> {
     return match s.parse::<i32>() {
         Ok(n) => Ok(n),
@@ -294,40 +329,56 @@ fn i32(s: String) -> Result<i32, String> {
     };
 }
 
+fn parse_offset_reg(s: String) -> Result<(i32, RegisterType), String> {
+    let first_parenthesis = s.find('(');
+    let first_parenthesis_idx: usize;
+    match first_parenthesis {
+        None => return Err(format_args!("invalid offset register: {}", s).to_string()),
+        Some(i) => first_parenthesis_idx = i,
+    };
+
+    let imm_string = s[..first_parenthesis_idx].trim();
+    let imm = i32(imm_string.to_string())?;
+
+    let reg_string = s[first_parenthesis_idx + 1..s.len() - 1].trim();
+
+    return Ok((imm, parse_register(reg_string.to_string())?));
+}
+
 fn parse_register(s: String) -> Result<RegisterType, String> {
     return match s.as_str() {
-        "zero" => Ok(RegisterType::ZERO),
-        "ra" => Ok(RegisterType::RA),
-        "sp" => Ok(RegisterType::SP),
-        "gp" => Ok(RegisterType::GP),
-        "tp" => Ok(RegisterType::TP),
-        "t0" => Ok(RegisterType::T0),
-        "t1" => Ok(RegisterType::T1),
-        "t2" => Ok(RegisterType::T2),
-        "s0" => Ok(RegisterType::S0),
-        "s1" => Ok(RegisterType::S1),
-        "a0" => Ok(RegisterType::A0),
-        "a1" => Ok(RegisterType::A1),
-        "a2" => Ok(RegisterType::A2),
-        "a3" => Ok(RegisterType::A3),
-        "a4" => Ok(RegisterType::A4),
-        "a5" => Ok(RegisterType::A5),
-        "a6" => Ok(RegisterType::A6),
-        "a7" => Ok(RegisterType::A7),
-        "s2" => Ok(RegisterType::S2),
-        "s3" => Ok(RegisterType::S3),
-        "s4" => Ok(RegisterType::S4),
-        "s5" => Ok(RegisterType::S5),
-        "s6" => Ok(RegisterType::S6),
-        "s7" => Ok(RegisterType::S7),
-        "s8" => Ok(RegisterType::S8),
-        "s9" => Ok(RegisterType::S9),
-        "s10" => Ok(RegisterType::S10),
-        "s11" => Ok(RegisterType::S11),
-        "t3" => Ok(RegisterType::T3),
-        "t4" => Ok(RegisterType::T4),
-        "t5" => Ok(RegisterType::T5),
-        "t6" => Ok(RegisterType::T6),
+        "zero" | "$zero" => Ok(RegisterType::ZERO),
+        "ra" | "$ra" => Ok(RegisterType::RA),
+        "sp" | "$sp" => Ok(RegisterType::SP),
+        "gp" | "$gp" => Ok(RegisterType::GP),
+        "tp" | "$tp" => Ok(RegisterType::TP),
+        "t0" | "$t0" => Ok(RegisterType::T0),
+        "t1" | "$t1" => Ok(RegisterType::T1),
+        "t2" | "$t2" => Ok(RegisterType::T2),
+        "s0" | "$s0" => Ok(RegisterType::S0),
+        "s1" | "$s1" => Ok(RegisterType::S1),
+        "a0" | "$a0" => Ok(RegisterType::A0),
+        "a1" | "$a1" => Ok(RegisterType::A1),
+        "a2" | "$a2" => Ok(RegisterType::A2),
+        "a3" | "$a3" => Ok(RegisterType::A3),
+        "a4" | "$a4" => Ok(RegisterType::A4),
+        "a5" | "$a5" => Ok(RegisterType::A5),
+        "a6" | "$a6" => Ok(RegisterType::A6),
+        "a7" | "$a7" => Ok(RegisterType::A7),
+        "s2" | "$s2" => Ok(RegisterType::S2),
+        "s3" | "$s3" => Ok(RegisterType::S3),
+        "s4" | "$s4" => Ok(RegisterType::S4),
+        "s5" | "$s5" => Ok(RegisterType::S5),
+        "s6" | "$s6" => Ok(RegisterType::S6),
+        "s7" | "$s7" => Ok(RegisterType::S7),
+        "s8" | "$s8" => Ok(RegisterType::S8),
+        "s9" | "$s9" => Ok(RegisterType::S9),
+        "s10" | "$s10" => Ok(RegisterType::S10),
+        "s11" | "$s11" => Ok(RegisterType::S11),
+        "t3" | "$t3" => Ok(RegisterType::T3),
+        "t4" | "$t4" => Ok(RegisterType::T4),
+        "t5" | "$t5" => Ok(RegisterType::T5),
+        "t6" | "$t6" => Ok(RegisterType::T6),
         _ => Err(format_args!("unknown register: {}", s).to_string()),
     };
 }
