@@ -16,8 +16,7 @@ impl VirtualMachine for Mvm1 {
     fn run(&mut self, application: &Application) -> Result<f32, String> {
         while self.ctx.pc / 4 < application.instructions.len() as i32 {
             let idx = self.fetch_instruction();
-            let runner = &application.instructions[idx];
-            self.decode(runner);
+            let runner = self.decode(application, idx);
             let execution = self.execute(application, runner)?;
             self.ctx.pc = execution.0;
             if write_back(execution.1) {
@@ -41,9 +40,14 @@ impl Mvm1 {
         (self.ctx.pc / 4) as usize
     }
 
-    fn decode(&mut self, runner: &Box<dyn InstructionRunner>) -> InstructionType {
+    fn decode<'a>(
+        &mut self,
+        application: &'a Application,
+        idx: usize,
+    ) -> &'a Box<dyn InstructionRunner> {
+        let runner = &application.instructions[idx];
         self.cycles += CYCLES_DECODE;
-        runner.instruction_type()
+        runner
     }
 
     fn execute(
