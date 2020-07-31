@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 
 const CYCLES_MEMORY_ACCESS: f32 = 50.;
-const CYCLES_REGISTER_ACCESS: f32 = 0.5;
+const CYCLES_REGISTER_ACCESS: f32 = 1.;
 const CYCLES_DECODE: f32 = 1.;
 
 pub struct Mvm1 {
