@@ -3,17 +3,17 @@ use crate::VirtualMachine;
 use std::collections::HashMap;
 use std::fs;
 
-const CYCLES_MEMORY_ACCESS: i64 = 50;
-const CYCLES_DECODE: i64 = 1;
-const CYCLES_WRITE: i64 = 1;
+const CYCLES_MEMORY_ACCESS: f32 = 50.;
+const CYCLES_REGISTER_ACCESS: f32 = 0.5;
+const CYCLES_DECODE: f32 = 1.;
 
 pub struct Mvm1 {
     ctx: Context,
-    cycles: i64,
+    cycles: f32,
 }
 
 impl VirtualMachine for Mvm1 {
-    fn run(&mut self, application: &Application) -> Result<i64, String> {
+    fn run(&mut self, application: &Application) -> Result<f32, String> {
         while self.ctx.pc / 4 < application.instructions.len() as i32 {
             let idx = self.fetch_instruction();
             let runner = &application.instructions[idx];
@@ -28,7 +28,7 @@ impl Mvm1 {
     pub fn new(memory_bytes: usize) -> Self {
         Mvm1 {
             ctx: Context::new(memory_bytes),
-            cycles: 0,
+            cycles: 0.,
         }
     }
 
@@ -49,7 +49,7 @@ impl Mvm1 {
     ) -> Result<(), String> {
         runner.run(&mut self.ctx, &application.labels)?;
 
-        let cycles = cycles_per_instruction(runner.instruction_type()) + CYCLES_WRITE;
+        let cycles = cycles_per_instruction(runner.instruction_type()) + CYCLES_REGISTER_ACCESS;
         self.cycles += cycles;
         Ok(())
     }

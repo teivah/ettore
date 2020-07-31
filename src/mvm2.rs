@@ -3,19 +3,20 @@ use crate::VirtualMachine;
 use std::collections::HashMap;
 use std::fs;
 
-const CYCLES_MEMORY_ACCESS: i64 = 50;
-const CYCLES_DECODE: i64 = 1;
-const CYCLES_WRITE: i64 = 1;
+const CYCLES_MEMORY_ACCESS: f32 = 50.;
+const CYCLES_L1_ACCESS: f32 = 1.;
+const CYCLES_REGISTER_ACCESS: f32 = 0.5;
+const CYCLES_DECODE: f32 = 1.;
 
 pub struct Mvm2 {
     ctx: Context,
-    cycles: i64,
+    cycles: f32,
     l1i_min: i32,
     l1i_max: i32,
 }
 
 impl VirtualMachine for Mvm2 {
-    fn run(&mut self, application: &Application) -> Result<i64, String> {
+    fn run(&mut self, application: &Application) -> Result<f32, String> {
         while self.ctx.pc / 4 < application.instructions.len() as i32 {
             let idx = self.fetch_instruction();
             let runner = &application.instructions[idx];
@@ -30,15 +31,15 @@ impl Mvm2 {
     pub fn new(memory_bytes: usize) -> Self {
         Mvm2 {
             ctx: Context::new(memory_bytes),
-            cycles: 0,
+            cycles: 0.,
             l1i_min: -1,
             l1i_max: -1,
         }
     }
 
     fn fetch_instruction(&mut self) -> usize {
-        if self.ctx.pc >= self.l1i_min && self.ctx.pc <= self.l1i_max {
-            self.cycles += 1;
+        if self.present_in_l1() {
+            self.cycles += CYCLES_L1_ACCESS;
             return (self.ctx.pc / 4) as usize;
         }
 
@@ -46,6 +47,10 @@ impl Mvm2 {
         self.l1i_max = self.ctx.pc + 64;
         self.cycles += CYCLES_MEMORY_ACCESS;
         return (self.ctx.pc / 4) as usize;
+    }
+
+    fn present_in_l1(&self) -> bool {
+        self.ctx.pc >= self.l1i_min && self.ctx.pc <= self.l1i_max
     }
 
     fn decode(&mut self, runner: &Box<dyn InstructionRunner>) -> InstructionType {
@@ -60,7 +65,7 @@ impl Mvm2 {
     ) -> Result<(), String> {
         runner.run(&mut self.ctx, &application.labels)?;
 
-        let cycles = cycles_per_instruction(runner.instruction_type()) + CYCLES_WRITE;
+        let cycles = cycles_per_instruction(runner.instruction_type()) + CYCLES_REGISTER_ACCESS;
         self.cycles += cycles;
         Ok(())
     }

@@ -10,7 +10,7 @@ pub const I5_7360U: i64 = 2_300_000_000;
 pub const SECOND_TO_NANOSECOND: i64 = 1_000_000_000;
 
 trait VirtualMachine {
-    fn run(&mut self, application: &Application) -> Result<i64, String>;
+    fn run(&mut self, application: &Application) -> Result<f32, String>;
 }
 
 fn main() {}
@@ -24,14 +24,14 @@ mod testdads {
     use std::borrow::Borrow;
     use std::fs;
 
-    fn execute(vm: &mut dyn VirtualMachine, instructions: &str) -> Result<i64, String> {
+    fn execute(vm: &mut dyn VirtualMachine, instructions: &str) -> Result<f32, String> {
         let application = parse(instructions.to_string()).unwrap();
         return vm.run(&application);
     }
 
-    fn stats(test: &str, cycles: i64) {
-        let s = cycles as f64 / I5_7360U as f64;
-        let ns = s * SECOND_TO_NANOSECOND as f64;
+    fn stats(test: &str, cycles: f32) {
+        let s = cycles / I5_7360U as f32;
+        let ns = s * SECOND_TO_NANOSECOND as f32;
         println!("{}: {} cycles, {:.2} nanoseconds", test, cycles, ns);
     }
 
