@@ -1,41 +1,44 @@
 use crate::opcodes::*;
-use crate::{VirtualMachine, I5_7360U, SECOND_TO_NANOSECOND};
+use crate::VirtualMachine;
 use std::collections::HashMap;
 use std::fs;
 
-struct Mvm1 {
+const CYCLES_MEMORY_ACCESS: i64 = 50;
+const CYCLES_DECODE: i64 = 1;
+const CYCLES_WRITE: i64 = 1;
+
+pub struct Mvm1 {
     ctx: Context,
     cycles: i64,
 }
 
-impl Mvm1 {
-    fn new(memory_bytes: usize) -> Self {
-        Mvm1 {
-            ctx: Context::new(memory_bytes),
-            cycles: 0,
-        }
-    }
-
-    fn run(&mut self, application: &Application) -> Result<(), String> {
+impl VirtualMachine for Mvm1 {
+    fn run(&mut self, application: &Application) -> Result<i64, String> {
         while self.ctx.pc / 4 < application.instructions.len() as i32 {
             let idx = self.fetch_instruction();
             let runner = &application.instructions[idx];
             self.decode(runner);
             self.execute_write(application, runner)?;
         }
-        let s = self.cycles as f64 / I5_7360U as f64;
-        let ns = s * SECOND_TO_NANOSECOND as f64;
-        println!("{} cycles, {} seconds, {} nanoseconds", self.cycles, s, ns);
-        return Ok(());
+        return Ok(self.cycles);
+    }
+}
+
+impl Mvm1 {
+    pub fn new(memory_bytes: usize) -> Self {
+        Mvm1 {
+            ctx: Context::new(memory_bytes),
+            cycles: 0,
+        }
     }
 
     fn fetch_instruction(&mut self) -> usize {
-        self.cycles += 50;
+        self.cycles += CYCLES_MEMORY_ACCESS;
         (self.ctx.pc / 4) as usize
     }
 
     fn decode(&mut self, runner: &Box<dyn InstructionRunner>) -> InstructionType {
-        self.cycles += 1;
+        self.cycles += CYCLES_DECODE;
         runner.instruction_type()
     }
 
@@ -46,46 +49,7 @@ impl Mvm1 {
     ) -> Result<(), String> {
         runner.run(&mut self.ctx, &application.labels)?;
 
-        let cycles = match runner.instruction_type() {
-            InstructionType::ADD => 2,
-            InstructionType::ADDI => 2,
-            InstructionType::AND => 2,
-            InstructionType::ANDI => 2,
-            InstructionType::AUIPC => 2,
-            InstructionType::BEQ => 2,
-            InstructionType::BGE => 2,
-            InstructionType::BGEU => 2,
-            InstructionType::BLT => 2,
-            InstructionType::BLTU => 2,
-            InstructionType::BNE => 2,
-            InstructionType::DIV => 2,
-            InstructionType::JAL => 2,
-            InstructionType::JALR => 2,
-            InstructionType::LUI => 2,
-            InstructionType::LB => 51,
-            InstructionType::LH => 51,
-            InstructionType::LW => 51,
-            InstructionType::NOP => 2,
-            InstructionType::MUL => 2,
-            InstructionType::OR => 2,
-            InstructionType::ORI => 2,
-            InstructionType::REM => 2,
-            InstructionType::SB => 50,
-            InstructionType::SH => 50,
-            InstructionType::SLL => 2,
-            InstructionType::SLLI => 2,
-            InstructionType::SLT => 2,
-            InstructionType::SLTU => 2,
-            InstructionType::SLTI => 2,
-            InstructionType::SRA => 2,
-            InstructionType::SRAI => 2,
-            InstructionType::SRL => 2,
-            InstructionType::SRLI => 2,
-            InstructionType::SUB => 2,
-            InstructionType::SW => 50,
-            InstructionType::XOR => 2,
-            InstructionType::XORI => 2,
-        };
+        let cycles = cycles_per_instruction(runner.instruction_type()) + CYCLES_WRITE;
         self.cycles += cycles;
         Ok(())
     }
