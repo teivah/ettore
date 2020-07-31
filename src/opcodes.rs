@@ -25,7 +25,7 @@ impl Context {
 }
 
 pub trait InstructionRunner {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String>;
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String>;
     fn instruction_type(&self) -> InstructionType;
 }
 
@@ -37,14 +37,13 @@ pub struct Add {
 }
 
 impl InstructionRunner for Add {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] + ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -60,10 +59,9 @@ pub struct Addi {
 }
 
 impl InstructionRunner for Addi {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.registers[self.rs] + self.imm);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -79,14 +77,13 @@ pub struct And {
 }
 
 impl InstructionRunner for And {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] & ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -102,10 +99,9 @@ pub struct Andi {
 }
 
 impl InstructionRunner for Andi {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.registers[self.rs] & self.imm);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -120,10 +116,9 @@ pub struct Auipc {
 }
 
 impl InstructionRunner for Auipc {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.pc + (self.imm << 12));
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -139,18 +134,17 @@ pub struct Beq {
 }
 
 impl InstructionRunner for Beq {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] == ctx.registers[self.rs2] {
             let addr: i32;
             match labels.get(self.label.as_str()) {
                 Some(v) => addr = *v,
                 None => return Err(format_args!("label {} does not exist", self.label).to_string()),
             }
-            ctx.pc = addr;
+            return Ok(addr);
         } else {
-            ctx.pc += 4;
+            return Ok(ctx.pc + 4);
         }
-        return Ok(());
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -166,18 +160,17 @@ pub struct Bge {
 }
 
 impl InstructionRunner for Bge {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] >= ctx.registers[self.rs2] {
             let addr: i32;
             match labels.get(self.label.as_str()) {
                 Some(v) => addr = *v,
                 None => return Err(format_args!("label {} does not exist", self.label).to_string()),
             }
-            ctx.pc = addr;
+            return Ok(addr);
         } else {
-            ctx.pc += 4;
+            return Ok(ctx.pc + 4);
         }
-        return Ok(());
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -193,18 +186,17 @@ pub struct Bgeu {
 }
 
 impl InstructionRunner for Bgeu {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] >= ctx.registers[self.rs2] {
             let addr: i32;
             match labels.get(self.label.as_str()) {
                 Some(v) => addr = *v,
                 None => return Err(format_args!("label {} does not exist", self.label).to_string()),
             }
-            ctx.pc = addr;
+            return Ok(addr);
         } else {
-            ctx.pc += 4;
+            return Ok(ctx.pc + 4);
         }
-        return Ok(());
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -220,18 +212,17 @@ pub struct Blt {
 }
 
 impl InstructionRunner for Blt {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
             let addr: i32;
             match labels.get(self.label.as_str()) {
                 Some(v) => addr = *v,
                 None => return Err(format_args!("label {} does not exist", self.label).to_string()),
             }
-            ctx.pc = addr;
+            return Ok(addr);
         } else {
-            ctx.pc += 4;
+            return Ok(ctx.pc + 4);
         }
-        return Ok(());
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -247,18 +238,17 @@ pub struct Bltu {
 }
 
 impl InstructionRunner for Bltu {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
             let addr: i32;
             match labels.get(self.label.as_str()) {
                 Some(v) => addr = *v,
                 None => return Err(format_args!("label {} does not exist", self.label).to_string()),
             }
-            ctx.pc = addr;
+            return Ok(addr);
         } else {
-            ctx.pc += 4;
+            return Ok(ctx.pc + 4);
         }
-        return Ok(());
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -274,18 +264,17 @@ pub struct Bne {
 }
 
 impl InstructionRunner for Bne {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] != ctx.registers[self.rs2] {
             let addr: i32;
             match labels.get(self.label.as_str()) {
                 Some(v) => addr = *v,
                 None => return Err(format_args!("label {} does not exist", self.label).to_string()),
             }
-            ctx.pc = addr;
+            return Ok(addr);
         } else {
-            ctx.pc += 4;
+            return Ok(ctx.pc + 4);
         }
-        return Ok(());
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -301,14 +290,13 @@ pub struct Div {
 }
 
 impl InstructionRunner for Div {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] / ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -323,7 +311,7 @@ pub struct Jal {
 }
 
 impl InstructionRunner for Jal {
-    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, labels: &HashMap<String, i32>) -> Result<i32, String> {
         let addr: i32;
         match labels.get(self.label.as_str()) {
             Some(v) => addr = *v,
@@ -331,8 +319,7 @@ impl InstructionRunner for Jal {
         }
 
         set_register(ctx, self.rd, ctx.pc + 4);
-        ctx.pc = addr;
-        return Ok(());
+        return Ok(addr);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -348,10 +335,9 @@ pub struct Jalr {
 }
 
 impl InstructionRunner for Jalr {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.pc + 4);
-        ctx.pc = ctx.registers[self.rs] + self.imm;
-        return Ok(());
+        return Ok(ctx.registers[self.rs] + self.imm);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -366,10 +352,9 @@ pub struct Lui {
 }
 
 impl InstructionRunner for Lui {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, self.imm << 12);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -385,13 +370,12 @@ pub struct Lb {
 }
 
 impl InstructionRunner for Lb {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         let idx = ctx.registers[self.rs1] + self.offset;
         let n = ctx.memory[idx as usize];
 
         set_register(ctx, self.rs2, n as i32);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -407,7 +391,7 @@ pub struct Lh {
 }
 
 impl InstructionRunner for Lh {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         let mut idx = ctx.registers[self.rs1] + self.offset;
         let i1 = ctx.memory[idx as usize];
         idx += 1;
@@ -416,8 +400,7 @@ impl InstructionRunner for Lh {
         let n = i32_from_bytes(i1, i2, 0, 0);
         set_register(ctx, self.rs2, n);
 
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -433,7 +416,7 @@ pub struct Lw {
 }
 
 impl InstructionRunner for Lw {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         let mut idx = ctx.registers[self.rs1] + self.offset;
         let i1 = ctx.memory[idx as usize];
         idx += 1;
@@ -445,8 +428,7 @@ impl InstructionRunner for Lw {
 
         let n = i32_from_bytes(i1, i2, i3, i4);
         set_register(ctx, self.rs2, n);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -458,9 +440,8 @@ impl InstructionRunner for Lw {
 pub struct Nop {}
 
 impl InstructionRunner for Nop {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
-        ctx.pc += 4;
-        return Ok(());
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -476,14 +457,13 @@ pub struct Mul {
 }
 
 impl InstructionRunner for Mul {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] * ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -499,14 +479,13 @@ pub struct Or {
 }
 
 impl InstructionRunner for Or {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] | ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -522,10 +501,9 @@ pub struct Ori {
 }
 
 impl InstructionRunner for Ori {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.registers[self.rs] | self.imm);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -541,14 +519,13 @@ pub struct Rem {
 }
 
 impl InstructionRunner for Rem {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] % ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -564,12 +541,11 @@ pub struct Sb {
 }
 
 impl InstructionRunner for Sb {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         let idx = ctx.registers[self.rs1] + self.offset;
         let n = ctx.registers[self.rs2];
         ctx.memory[idx as usize] = n as i8;
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -585,15 +561,14 @@ pub struct Sh {
 }
 
 impl InstructionRunner for Sh {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         let mut idx = ctx.registers[self.rs1] + self.offset;
         let n = ctx.registers[self.rs2];
         let bytes = bytes_from_low_bits(n);
         ctx.memory[idx as usize] = bytes.0;
         idx += 1;
         ctx.memory[idx as usize] = bytes.1;
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -609,14 +584,13 @@ pub struct Sll {
 }
 
 impl InstructionRunner for Sll {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] << ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -632,10 +606,9 @@ pub struct Slli {
 }
 
 impl InstructionRunner for Slli {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.registers[self.rs] << self.imm);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -651,14 +624,13 @@ pub struct Slt {
 }
 
 impl InstructionRunner for Slt {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
             set_register(ctx, self.rd, 1);
         } else {
             set_register(ctx, self.rd, 0);
         }
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -674,14 +646,13 @@ pub struct Sltu {
 }
 
 impl InstructionRunner for Sltu {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs1] < ctx.registers[self.rs2] {
             set_register(ctx, self.rd, 1);
         } else {
             set_register(ctx, self.rd, 0);
         }
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -697,14 +668,13 @@ pub struct Slti {
 }
 
 impl InstructionRunner for Slti {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         if ctx.registers[self.rs] < self.imm {
             set_register(ctx, self.rd, 1);
         } else {
             set_register(ctx, self.rd, 0);
         }
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -720,14 +690,13 @@ pub struct Sra {
 }
 
 impl InstructionRunner for Sra {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] >> ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -743,10 +712,9 @@ pub struct Srai {
 }
 
 impl InstructionRunner for Srai {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.registers[self.rs] >> self.imm);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -762,14 +730,13 @@ pub struct Srl {
 }
 
 impl InstructionRunner for Srl {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] >> ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -785,10 +752,9 @@ pub struct Srli {
 }
 
 impl InstructionRunner for Srli {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.registers[self.rs] >> self.imm);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -804,14 +770,13 @@ pub struct Sub {
 }
 
 impl InstructionRunner for Sub {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] - ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -827,7 +792,7 @@ pub struct Sw {
 }
 
 impl InstructionRunner for Sw {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         let mut idx = ctx.registers[self.rs1] + self.offset;
         let n = ctx.registers[self.rs2];
         let bytes = bytes_from_low_bits(n);
@@ -838,8 +803,7 @@ impl InstructionRunner for Sw {
         ctx.memory[idx as usize] = bytes.2;
         idx += 1;
         ctx.memory[idx as usize] = bytes.3;
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -855,14 +819,13 @@ pub struct Xor {
 }
 
 impl InstructionRunner for Xor {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(
             ctx,
             self.rd,
             ctx.registers[self.rs1] ^ ctx.registers[self.rs2],
         );
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -878,10 +841,9 @@ pub struct Xori {
 }
 
 impl InstructionRunner for Xori {
-    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<(), String> {
+    fn run(&self, ctx: &mut Context, _: &HashMap<String, i32>) -> Result<i32, String> {
         set_register(ctx, self.rd, ctx.registers[self.rs] ^ self.imm);
-        ctx.pc += 4;
-        return Ok(());
+        return Ok(ctx.pc + 4);
     }
 
     fn instruction_type(&self) -> InstructionType {
@@ -1039,7 +1001,8 @@ impl Runner {
     fn run(&mut self) -> Result<(), String> {
         while self.ctx.pc / 4 < self.application.instructions.len() as i32 {
             let runner = &self.application.instructions[(self.ctx.pc / 4) as usize];
-            runner.run(&mut self.ctx, &self.application.labels)?;
+            let pc = runner.run(&mut self.ctx, &self.application.labels)?;
+            self.ctx.pc = pc;
         }
         return Ok(());
     }

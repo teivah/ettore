@@ -24,8 +24,9 @@ impl VirtualMachine for Mvm3 {
             let idx = self.fetch_instruction();
             let runner = &application.instructions[idx];
             self.decode(runner);
-            let instruction_type = self.execute(application, runner)?;
-            if write_back(instruction_type) {
+            let execution = self.execute(application, runner)?;
+            self.ctx.pc = execution.0;
+            if write_back(execution.1) {
                 self.write();
             }
         }
@@ -70,10 +71,10 @@ impl Mvm3 {
         &mut self,
         application: &Application,
         runner: &Box<dyn InstructionRunner>,
-    ) -> Result<InstructionType, String> {
-        runner.run(&mut self.ctx, &application.labels)?;
+    ) -> Result<(i32, InstructionType), String> {
+        let pc = runner.run(&mut self.ctx, &application.labels)?;
         self.cycles += cycles_per_instruction(runner.instruction_type());
-        Ok(runner.instruction_type())
+        Ok((pc, runner.instruction_type()))
     }
 
     fn write(&mut self) {
@@ -81,7 +82,31 @@ impl Mvm3 {
     }
 }
 
-struct Fetch {}
+struct Fetch {
+    f: Option<fn(&mut Mvm3) -> usize>,
+    remaining_cycles: f32,
+    complete: bool,
+    output_bus: Bus<usize>,
+}
+
+impl Fetch {
+    fn new() -> Self {
+        Fetch {
+            f: None,
+            remaining_cycles: 0.0,
+            complete: false,
+            output_bus: Bus { value: None },
+        }
+    }
+
+    fn cycle(&mut self) {
+        if self.complete {
+            return;
+        }
+
+        if self.f.is_none() {}
+    }
+}
 
 #[cfg(test)]
 mod tests {
