@@ -14,6 +14,10 @@ pub struct Mvm3 {
     l1i: (i32, i32),
 }
 
+struct Bus<T> {
+    value: Option<T>,
+}
+
 impl VirtualMachine for Mvm3 {
     fn run(&mut self, application: &Application) -> Result<f32, String> {
         while self.ctx.pc / 4 < application.instructions.len() as i32 {
@@ -77,6 +81,8 @@ impl Mvm3 {
     }
 }
 
+struct Fetch {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,6 +140,20 @@ mod tests {
                 .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>1},
+        );
+    }
+
+    #[test]
+    fn test_pipelining() {
+        assert(
+            HashMap::new(),
+            5,
+            HashMap::new(),
+            "addi t0, zero, 1
+            addi t1, zero, 2
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 1, RegisterType::T1 => 2, RegisterType::T2 => 3 },
+            HashMap::new(),
         );
     }
 }
