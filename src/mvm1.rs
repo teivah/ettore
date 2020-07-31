@@ -48,9 +48,7 @@ impl Mvm1 {
         runner: &Box<dyn InstructionRunner>,
     ) -> Result<(), String> {
         runner.run(&mut self.ctx, &application.labels)?;
-
-        let cycles = cycles_per_instruction(runner.instruction_type()) + CYCLES_REGISTER_ACCESS;
-        self.cycles += cycles;
+        self.cycles += cycles_per_instruction(runner.instruction_type()) + CYCLES_REGISTER_ACCESS;
         Ok(())
     }
 }

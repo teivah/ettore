@@ -11,8 +11,7 @@ const CYCLES_DECODE: f32 = 1.;
 pub struct Mvm2 {
     ctx: Context,
     cycles: f32,
-    l1i_min: i32,
-    l1i_max: i32,
+    l1i: (i32, i32),
 }
 
 impl VirtualMachine for Mvm2 {
@@ -32,25 +31,27 @@ impl Mvm2 {
         Mvm2 {
             ctx: Context::new(memory_bytes),
             cycles: 0.,
-            l1i_min: -1,
-            l1i_max: -1,
+            l1i: (-1, -1),
         }
     }
 
     fn fetch_instruction(&mut self) -> usize {
-        if self.present_in_l1() {
+        if self.present_in_l1i() {
             self.cycles += CYCLES_L1_ACCESS;
-            return (self.ctx.pc / 4) as usize;
+        } else {
+            self.fetch_l1i();
         }
 
-        self.l1i_min = self.ctx.pc;
-        self.l1i_max = self.ctx.pc + 64;
-        self.cycles += CYCLES_MEMORY_ACCESS;
-        return (self.ctx.pc / 4) as usize;
+        (self.ctx.pc / 4) as usize
     }
 
-    fn present_in_l1(&self) -> bool {
-        self.ctx.pc >= self.l1i_min && self.ctx.pc <= self.l1i_max
+    fn present_in_l1i(&self) -> bool {
+        self.ctx.pc >= self.l1i.0 && self.ctx.pc <= self.l1i.1
+    }
+
+    fn fetch_l1i(&mut self) {
+        self.cycles += CYCLES_MEMORY_ACCESS;
+        self.l1i = (self.ctx.pc, self.ctx.pc + 64);
     }
 
     fn decode(&mut self, runner: &Box<dyn InstructionRunner>) -> InstructionType {
@@ -64,9 +65,7 @@ impl Mvm2 {
         runner: &Box<dyn InstructionRunner>,
     ) -> Result<(), String> {
         runner.run(&mut self.ctx, &application.labels)?;
-
-        let cycles = cycles_per_instruction(runner.instruction_type()) + CYCLES_REGISTER_ACCESS;
-        self.cycles += cycles;
+        self.cycles += cycles_per_instruction(runner.instruction_type()) + CYCLES_REGISTER_ACCESS;
         Ok(())
     }
 }
