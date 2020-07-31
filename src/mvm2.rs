@@ -6,8 +6,8 @@ use std::fs;
 struct Mvm2 {
     ctx: Context,
     cycles: i64,
-    l1_min: i32,
-    l1_max: i32,
+    l1i_min: i32,
+    l1i_max: i32,
 }
 
 impl Mvm2 {
@@ -15,8 +15,8 @@ impl Mvm2 {
         Mvm2 {
             ctx: Context::new(memory_bytes),
             cycles: 0,
-            l1_min: -1,
-            l1_max: -1,
+            l1i_min: -1,
+            l1i_max: -1,
         }
     }
 
@@ -35,13 +35,13 @@ impl Mvm2 {
     }
 
     fn fetch_instruction(&mut self) -> usize {
-        if self.ctx.pc >= self.l1_min && self.ctx.pc <= self.l1_max {
+        if self.ctx.pc >= self.l1i_min && self.ctx.pc <= self.l1i_max {
             self.cycles += 1;
             return (self.ctx.pc / 4) as usize;
         }
 
-        self.l1_min = self.ctx.pc;
-        self.l1_max = self.ctx.pc + 64;
+        self.l1i_min = self.ctx.pc;
+        self.l1i_max = self.ctx.pc + 64;
         self.cycles += 50;
         return (self.ctx.pc / 4) as usize;
     }
