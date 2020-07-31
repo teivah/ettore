@@ -1,3 +1,5 @@
+mod mvm3;
+
 use crate::opcodes::Application;
 
 mod bit;
