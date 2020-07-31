@@ -985,6 +985,24 @@ pub fn write_back(instruction_type: InstructionType) -> bool {
     }
 }
 
+pub fn jump(instruction_type: InstructionType) -> bool {
+    match instruction_type {
+        InstructionType::JAL | InstructionType::JALR => true,
+        _ => false,
+    }
+}
+
+pub fn conditional_branching(instruction_type: InstructionType) -> bool {
+    match instruction_type {
+        InstructionType::BEQ
+        | InstructionType::BNE
+        | InstructionType::BLT
+        | InstructionType::BGE
+        | InstructionType::BGEU => true,
+        _ => false,
+    }
+}
+
 struct Runner {
     ctx: Context,
     application: Application,

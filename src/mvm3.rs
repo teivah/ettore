@@ -1,5 +1,6 @@
 use crate::opcodes::*;
 use crate::VirtualMachine;
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
 
@@ -11,23 +12,21 @@ const CYCLES_DECODE: f32 = 1.;
 pub struct Mvm3 {
     ctx: Context,
     cycles: f32,
-    l1i: (i32, i32),
-}
 
-struct Bus<T> {
-    value: Option<T>,
+    fetch_instruction: FetchInstruction,
+    fetch_instruction_out: Option<usize>,
 }
 
 impl VirtualMachine for Mvm3 {
     fn run(&mut self, application: &Application) -> Result<f32, String> {
-        while self.ctx.pc / 4 < application.instructions.len() as i32 {
-            let idx = self.fetch_instruction();
-            let runner = &application.instructions[idx];
-            self.decode(runner);
-            let execution = self.execute(application, runner)?;
-            self.ctx.pc = execution.0;
-            if write_back(execution.1) {
-                self.write();
+        let mut cycles: f32 = 0.;
+        loop {
+            cycles += 1.;
+            let instruction = self
+                .fetch_instruction
+                .cycle(application, self.fetch_instruction_out.is_some());
+            if instruction.is_some() {
+                self.fetch_instruction_out = Some(instruction.unwrap());
             }
         }
         return Ok(self.cycles);
@@ -39,72 +38,83 @@ impl Mvm3 {
         Mvm3 {
             ctx: Context::new(memory_bytes),
             cycles: 0.,
-            l1i: (-1, -1),
+            fetch_instruction: FetchInstruction::new(),
+            fetch_instruction_out: None,
         }
-    }
-
-    fn fetch_instruction(&mut self) -> usize {
-        if self.present_in_l1i() {
-            self.cycles += CYCLES_L1_ACCESS;
-        } else {
-            self.fetch_l1i();
-        }
-
-        (self.ctx.pc / 4) as usize
-    }
-
-    fn present_in_l1i(&self) -> bool {
-        self.ctx.pc >= self.l1i.0 && self.ctx.pc <= self.l1i.1
-    }
-
-    fn fetch_l1i(&mut self) {
-        self.cycles += CYCLES_MEMORY_ACCESS;
-        self.l1i = (self.ctx.pc, self.ctx.pc + 64);
-    }
-
-    fn decode(&mut self, runner: &Box<dyn InstructionRunner>) -> InstructionType {
-        self.cycles += CYCLES_DECODE;
-        runner.instruction_type()
-    }
-
-    fn execute(
-        &mut self,
-        application: &Application,
-        runner: &Box<dyn InstructionRunner>,
-    ) -> Result<(i32, InstructionType), String> {
-        let pc = runner.run(&mut self.ctx, &application.labels)?;
-        self.cycles += cycles_per_instruction(runner.instruction_type());
-        Ok((pc, runner.instruction_type()))
-    }
-
-    fn write(&mut self) {
-        self.cycles += CYCLES_REGISTER_ACCESS;
     }
 }
 
-struct Fetch {
-    f: Option<fn(&mut Mvm3) -> usize>,
+struct L1I {
+    boundary: (i32, i32),
+}
+
+impl L1I {
+    fn present(&self, pc: i32) -> bool {
+        pc >= self.boundary.0 && pc <= self.boundary.1
+    }
+
+    fn fetch(&mut self, pc: i32) {
+        self.boundary = (pc, pc + 64);
+    }
+}
+
+struct FetchInstruction {
+    pc: i32,
+    l1i: L1I,
     remaining_cycles: f32,
     complete: bool,
-    output_bus: Bus<usize>,
+    processing: bool,
 }
 
-impl Fetch {
+impl FetchInstruction {
     fn new() -> Self {
-        Fetch {
-            f: None,
+        FetchInstruction {
+            pc: 0,
+            l1i: L1I { boundary: (-1, -1) },
             remaining_cycles: 0.0,
             complete: false,
-            output_bus: Bus { value: None },
+            processing: false,
         }
     }
 
-    fn cycle(&mut self) {
+    fn cycle(&mut self, application: &Application, output_bus_blocked: bool) -> Option<usize> {
         if self.complete {
-            return;
+            return None;
         }
 
-        if self.f.is_none() {}
+        if !self.processing {
+            self.processing = true;
+            if self.l1i.present(self.pc) {
+                self.remaining_cycles = CYCLES_L1_ACCESS;
+            } else {
+                self.remaining_cycles = CYCLES_MEMORY_ACCESS;
+                // Should be done after the processing of the 50 cycles
+                self.l1i.fetch(self.pc);
+                return None;
+            }
+        }
+
+        self.remaining_cycles -= 1.;
+        return if self.remaining_cycles == 0. {
+            if output_bus_blocked {
+                self.remaining_cycles = 1.;
+                return None;
+            }
+
+            self.processing = false;
+            let current_pc = self.pc;
+            self.pc += 4;
+            if self.pc / 4 >= application.instructions.len() as i32 {
+                self.complete = true;
+            }
+            Some((current_pc / 4) as usize)
+        } else {
+            None
+        };
+    }
+
+    fn set_pc(&mut self, pc: i32) {
+        self.pc = pc;
     }
 }
 
