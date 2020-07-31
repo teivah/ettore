@@ -1016,6 +1016,13 @@ pub fn cycles_per_instruction(instruction_type: InstructionType) -> f32 {
     }
 }
 
+pub fn write_back(instruction_type: InstructionType) -> bool {
+    match instruction_type {
+        InstructionType::SB | InstructionType::SW | InstructionType::SH => false,
+        _ => true,
+    }
+}
+
 struct Runner {
     ctx: Context,
     application: Application,

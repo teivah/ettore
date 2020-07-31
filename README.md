@@ -79,5 +79,5 @@ RISC source: [prime-number.asm](res/risc/prime-number.asm)
 |Machine|n=1109|
 |:--------:|:-------------:|
 |i5-7360U|253 ns|
-|MVM-1|64101 ns|
-|MVM-2|4939 ns|
+|MVM-1|64100 ns|
+|MVM-2|4938 ns|

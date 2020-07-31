@@ -20,7 +20,10 @@ impl VirtualMachine for Mvm2 {
             let idx = self.fetch_instruction();
             let runner = &application.instructions[idx];
             self.decode(runner);
-            self.execute_write(application, runner)?;
+            let instruction_type = self.execute(application, runner)?;
+            if write_back(instruction_type) {
+                self.write();
+            }
         }
         return Ok(self.cycles);
     }
@@ -59,14 +62,18 @@ impl Mvm2 {
         runner.instruction_type()
     }
 
-    fn execute_write(
+    fn execute(
         &mut self,
         application: &Application,
         runner: &Box<dyn InstructionRunner>,
-    ) -> Result<(), String> {
+    ) -> Result<InstructionType, String> {
         runner.run(&mut self.ctx, &application.labels)?;
-        self.cycles += cycles_per_instruction(runner.instruction_type()) + CYCLES_REGISTER_ACCESS;
-        Ok(())
+        self.cycles += cycles_per_instruction(runner.instruction_type());
+        Ok(runner.instruction_type())
+    }
+
+    fn write(&mut self) {
+        self.cycles += CYCLES_REGISTER_ACCESS;
     }
 }
 
