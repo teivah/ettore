@@ -88,7 +88,7 @@ impl<'a> Mvm3<'a> {
             )?;
             if execute.is_some() {
                 if self.branch_unit.pipeline_to_be_flushed(&self.ctx) {
-                    self.flush();
+                    self.flush(self.ctx.pc);
                 }
             }
             if !self.write_bus.is_empty() {
@@ -104,8 +104,8 @@ impl<'a> Mvm3<'a> {
         return Ok(self.cycles);
     }
 
-    fn flush(&mut self) {
-        self.fetch_unit.flush();
+    fn flush(&mut self, pc: i32) {
+        self.fetch_unit.flush(pc);
         self.decode_bus.flush();
         self.decode_unit.flush();
         self.execute_bus.flush();
@@ -206,8 +206,9 @@ impl FetchUnit {
         }
     }
 
-    fn flush(&mut self) {
+    fn flush(&mut self, pc: i32) {
         self.processing = false;
+        self.pc = pc;
     }
 
     fn is_empty(&self) -> bool {
@@ -414,12 +415,62 @@ mod tests {
     fn test_pipelining_simple() {
         assert(
             HashMap::new(),
-            5,
+            0,
             HashMap::new(),
             "addi t0, zero, 1
             addi t1, zero, 2
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 2, RegisterType::T2 => 3 },
+            HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn test_pipelining_jal() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi t0, zero, 1
+            jal t2, foo
+            addi t1, zero, 2
+            foo:
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 1, RegisterType::T1 => 0, RegisterType::T2 => 3 },
+            HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn test_pipelining_conditional_branching_true() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi t0, zero, 1
+            addi t1, zero, 1
+            beq t0, t1, foo
+            addi t1, zero, 2
+            foo:
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 1, RegisterType::T1 => 1, RegisterType::T2 => 3 },
+            HashMap::new(),
+        );
+    }
+
+    #[test]
+    fn test_pipelining_conditional_branching_false() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi t0, zero, 0
+            addi t1, zero, 1
+            beq t0, t1, foo
+            addi t1, zero, 2
+            foo:
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 0, RegisterType::T1 => 2, RegisterType::T2 => 3 },
             HashMap::new(),
         );
     }
