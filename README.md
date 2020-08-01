@@ -11,7 +11,7 @@ It does not implement any of the known CPU optimizations like pipelining, out-of
 
 Here is the architecture, divided in 4 classic stages:
 * Fetch: fetch an instruction from the main memory
-* Decode: decode an instruction
+* Decode: decode the instruction
 * Execute: execute the RISC-V instruction
 * Write: write-back the result to a register or the main memory
 
@@ -41,7 +41,7 @@ Here is the architecture, divided in 4 classic stages:
 
 ## MVM-2
 
-Compared to MVM-1, we add a cache for instructions called L1I (Level 1 Instructions) with a size of 64 KB. The caching policy is straightforward: as soon as we meet an instruction that is not present in L1I, we fetch a cache line of 64 KB instructions from the main memory, and we cache it in LI1.
+Compared to MVM-1, we add a cache for instructions called L1I (Level 1 Instructions) with a size of 64 KB. The caching policy is straightforward: as soon as we meet an instruction that is not present in L1I, we fetch a cache line of 64 KB instructions from the main memory, and we cache it into LI1.
 
 ```
 +-----+     +-------+
@@ -68,8 +68,6 @@ Compared to MVM-1, we add a cache for instructions called L1I (Level 1 Instructi
 
 ```
 
-The cache size is 64 bytes and is composed of a single cache line of 64 bytes.
-
 ## MVM-3
 
 MVM-3 keeps the same architecture than MVM-2 with 4 stages and L1I. Yet, this version implements [pipelining](https://en.wikipedia.org/wiki/Instruction_pipelining). 
@@ -78,11 +76,11 @@ In a nutshell, pipelining allows to keep every stage as busy as possible. For ex
 
 This way, the first instruction can be executed in 4 cycles (assuming the fetch is done from L1I), whereas the next instructions will be executed in only 1 cycle.
 
-One of the complexity with pipelining is to handle conditional branches. What if we fetch a [bge](https://msyksphinz-self.github.io/riscv-isadoc/html/rvi.html#bge) instruction for example? The next instruction fetched will not be necessarily the one we should have fetched/decoded/executed/written. In this case, we implement first version of a basic branch prediction handled by the Branch Unit. 
+One of the complexity with pipelining is to handle conditional branches. What if we fetch a [bge](https://msyksphinz-self.github.io/riscv-isadoc/html/rvi.html#bge) instruction for example? The next instruction fetched will not be necessarily the one we should have fetched/decoded/executed/written. As a solution, we implemented a first version of branch prediction handled by the Branch Unit. 
 
-The branch unit takes the hypothesis that a condition branch will not be taken. Hence, after having fetch an instruction, regardless if it's a conditional branch, we fetch the next after it. If the prediction was wrong, we need to flush the pipeline, revert the program counter to the destination marked by the conditional branch instruction, and continue the execution.
+The Branch Unit takes the hypothesis that a condition branch will **not** be taken. Hence, after having fetched an instruction, regardless if it's a conditional branch, we will fetch the next instruction after it. If the prediction was wrong, we need to flush the pipeline, revert the program counter to the destination marked by the conditional branch instruction, and continue the execution.
 
-Of course, pipeline flushing has an immediate performance impact.  
+Of course, pipeline flushing has an immediate performance impact. Modern CPUs have a branch prediction mechanism that is move evolved than MVM-3.
 
 ```
 +-----+     +-------+
