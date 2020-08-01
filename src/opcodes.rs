@@ -894,6 +894,7 @@ pub enum RegisterType {
     T6,
 }
 
+#[derive(Clone)]
 pub enum InstructionType {
     ADD,
     ADDI,

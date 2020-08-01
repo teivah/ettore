@@ -18,6 +18,9 @@ pub struct Mvm3<'a> {
     decode_bus: Bus<usize>,
     decode_unit: DecodeUnit,
     execute_bus: Bus<&'a Box<dyn InstructionRunner>>,
+    execute_unit: ExecuteUnit,
+    write_bus: Bus<InstructionType>,
+    write_unit: WriteUnit,
 }
 
 pub struct Bus<T: Clone> {
@@ -59,8 +62,18 @@ impl<'a> Mvm3<'a> {
             self.fetch_unit.cycle(application, &mut self.decode_bus);
             self.decode_unit
                 .cycle(application, &mut self.decode_bus, &mut self.execute_bus);
-
             // TODO If jump or conditional branching
+            self.execute_unit.cycle(
+                &mut self.ctx,
+                application,
+                &mut self.execute_bus,
+                &mut self.write_bus,
+            )?;
+            if !self.write_bus.is_empty() {
+                if write_back(self.write_bus.get()) {
+                    self.write_unit.cycle();
+                }
+            }
         }
         return Ok(self.cycles);
     }
@@ -75,6 +88,9 @@ impl<'a> Mvm3<'a> {
             decode_bus: Bus::new(1),
             decode_unit: DecodeUnit::new(),
             execute_bus: Bus::new(1),
+            execute_unit: ExecuteUnit {},
+            write_bus: Bus::new(1),
+            write_unit: WriteUnit::new(),
         }
     }
 }
@@ -167,6 +183,41 @@ impl DecodeUnit {
         let runner = &application.instructions[idx];
         out_bus.add(runner);
     }
+}
+
+struct ExecuteUnit {}
+
+impl ExecuteUnit {
+    fn new() -> Self {
+        ExecuteUnit {}
+    }
+
+    fn cycle(
+        &self,
+        ctx: &mut Context,
+        application: &Application,
+        in_bus: &mut Bus<&Box<dyn InstructionRunner>>,
+        out_bus: &mut Bus<InstructionType>,
+    ) -> Result<(), String> {
+        if in_bus.is_empty() {
+            return Ok(());
+        }
+        let runner = in_bus.get();
+        let pc = runner.run(ctx, &application.labels)?;
+        ctx.pc = pc;
+        out_bus.add(runner.instruction_type());
+        return Ok(());
+    }
+}
+
+struct WriteUnit {}
+
+impl WriteUnit {
+    fn new() -> Self {
+        WriteUnit {}
+    }
+
+    fn cycle(&self) {}
 }
 
 #[cfg(test)]
