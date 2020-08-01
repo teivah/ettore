@@ -14,11 +14,14 @@ pub struct Mvm3<'a> {
     ctx: Context,
 
     fetch_unit: FetchUnit,
-    decode_bus: Bus<usize>,
+    fetch_bus_out: Bus<usize>,
+    decode_bus_in: Bus<usize>,
     decode_unit: DecodeUnit,
-    execute_bus: Bus<&'a Box<dyn InstructionRunner>>,
+    decode_bus_out: Bus<&'a Box<dyn InstructionRunner>>,
+    execute_bus_in: Bus<&'a Box<dyn InstructionRunner>>,
     execute_unit: ExecuteUnit<'a>,
-    write_bus: Bus<InstructionType>,
+    execute_bus_out: Bus<InstructionType>,
+    write_bus_in: Bus<InstructionType>,
     write_unit: WriteUnit,
     branch_unit: BranchUnit,
 }
@@ -52,12 +55,24 @@ impl<T: Clone> Bus<T> {
         self.queue.peek().unwrap()
     }
 
+    fn size(&mut self) -> usize {
+        self.queue.size()
+    }
+
     fn is_full(&self) -> bool {
         self.queue.size() == self.max
     }
 
     fn is_empty(&self) -> bool {
         self.queue.size() == 0
+    }
+
+    fn connect(&mut self, dest: &mut Bus<T>) -> bool {
+        if !self.is_empty() && !dest.is_full() {
+            dest.add(self.get());
+            return dest.size() == 1;
+        }
+        return false;
     }
 }
 
@@ -66,33 +81,57 @@ impl<'a> Mvm3<'a> {
         let mut cycles: f32 = 0.;
         loop {
             cycles += 1.;
-
-            self.fetch_unit.cycle(application, &mut self.decode_bus);
-            self.decode_unit
-                .cycle(application, &mut self.decode_bus, &mut self.execute_bus);
-            if !self.execute_bus.is_empty() {
-                let runner = self.execute_bus.peek();
-                let instruction_type = runner.instruction_type();
-                if jump(&instruction_type) {
-                    self.branch_unit.jump();
-                } else if conditional_branching(&instruction_type) {
-                    self.branch_unit.conditional_branching(self.ctx.pc + 4)
-                }
+            self.fetch_unit.cycle(application, &mut self.fetch_bus_out);
+            if self.fetch_bus_out.connect(&mut self.decode_bus_in) {
+                // If there was a connection (a data exchanged between the buses),
+                // we wait for another cycle before to give the target unit the data.
+                self.decode_unit
+                    .cycle(application, &mut Bus::new(0), &mut self.decode_bus_out);
+            } else {
+                self.decode_unit.cycle(
+                    application,
+                    &mut self.decode_bus_in,
+                    &mut self.decode_bus_out,
+                );
             }
-            let execute = self.execute_unit.cycle(
-                &mut self.ctx,
-                application,
-                &mut self.execute_bus,
-                &mut self.write_bus,
-            )?;
+
+            let mut execute: Option<()>;
+            if self.decode_bus_out.connect(&mut self.execute_bus_in) {
+                execute = self.execute_unit.cycle(
+                    &mut self.ctx,
+                    application,
+                    &mut Bus::new(0),
+                    &mut self.execute_bus_out,
+                )?;
+            } else {
+                if !self.execute_bus_in.is_empty() {
+                    let runner = self.execute_bus_in.peek();
+                    let instruction_type = runner.instruction_type();
+                    if jump(&instruction_type) {
+                        self.branch_unit.jump();
+                    } else if conditional_branching(&instruction_type) {
+                        self.branch_unit.conditional_branching(self.ctx.pc + 4)
+                    }
+                }
+                execute = self.execute_unit.cycle(
+                    &mut self.ctx,
+                    application,
+                    &mut self.execute_bus_in,
+                    &mut self.execute_bus_out,
+                )?;
+            }
+
             if execute.is_some() {
                 if self.branch_unit.pipeline_to_be_flushed(&self.ctx) {
                     self.flush(self.ctx.pc);
                 }
             }
-            if !self.write_bus.is_empty() {
-                if write_back(self.write_bus.get()) {
-                    self.write_unit.cycle();
+
+            if !self.execute_bus_out.connect(&mut self.write_bus_in) {
+                if !self.write_bus_in.is_empty() {
+                    if write_back(self.write_bus_in.get()) {
+                        self.write_unit.cycle();
+                    }
                 }
             }
 
@@ -105,10 +144,10 @@ impl<'a> Mvm3<'a> {
 
     fn flush(&mut self, pc: i32) {
         self.fetch_unit.flush(pc);
-        self.decode_bus.flush();
+        self.decode_bus_in.flush();
         self.decode_unit.flush();
-        self.execute_bus.flush();
-        self.write_bus.flush();
+        self.execute_bus_in.flush();
+        self.write_bus_in.flush();
     }
 
     fn is_complete(&self) -> bool {
@@ -116,9 +155,9 @@ impl<'a> Mvm3<'a> {
             && self.decode_unit.is_empty()
             && self.execute_unit.is_empty()
             && self.write_unit.is_empty()
-            && self.decode_bus.is_empty()
-            && self.execute_bus.is_empty()
-            && self.write_bus.is_empty()
+            && self.decode_bus_in.is_empty()
+            && self.execute_bus_in.is_empty()
+            && self.write_bus_in.is_empty()
     }
 }
 
@@ -127,11 +166,14 @@ impl<'a> Mvm3<'a> {
         Mvm3 {
             ctx: Context::new(memory_bytes),
             fetch_unit: FetchUnit::new(),
-            decode_bus: Bus::new(1),
+            fetch_bus_out: Bus::new(1),
+            decode_bus_in: Bus::new(2),
             decode_unit: DecodeUnit::new(),
-            execute_bus: Bus::new(1),
+            decode_bus_out: Bus::new(1),
+            execute_bus_in: Bus::new(2),
             execute_unit: ExecuteUnit::new(),
-            write_bus: Bus::new(1),
+            execute_bus_out: Bus::new(1),
+            write_bus_in: Bus::new(2),
             write_unit: WriteUnit::new(),
             branch_unit: BranchUnit::new(),
         }
@@ -206,6 +248,7 @@ impl FetchUnit {
 
     fn flush(&mut self, pc: i32) {
         self.processing = false;
+        self.complete = false;
         self.pc = pc;
     }
 
@@ -388,28 +431,29 @@ mod tests {
         let cycles = runner.run(&application).unwrap();
         assert_eq!(expected_cycles, cycles);
         for assertion in assertions_registers {
-            assert_eq!(runner.ctx.registers[assertion.0], assertion.1);
+            assert_eq!(assertion.1, runner.ctx.registers[assertion.0]);
         }
         for assertion in assertions_memory {
-            assert_eq!(runner.ctx.memory[assertion.0], assertion.1);
+            assert_eq!(assertion.1, runner.ctx.memory[assertion.0]);
         }
     }
 
-    // #[test]
-    // fn test_prime_number() {
-    //     let bits = bytes_from_low_bits(5);
-    //     assert(
-    //         HashMap::new(),
-    //         5,
-    //         map! {0 => bits.0,1 => bits.1,2 => bits.2,3 => bits.3},
-    //         fs::read_to_string("res/risc/prime-number.asm")
-    //             .unwrap()
-    //             .as_str()
-    //             .borrow(),
-    //         map! {RegisterType::A0 => 4},
-    //         map! {4=>1},
-    //     );
-    // }
+    #[test]
+    fn test_prime_number() {
+        let bits = bytes_from_low_bits(1109);
+        assert(
+            HashMap::new(),
+            5,
+            map! {0 => bits.0,1 => bits.1,2 => bits.2,3 => bits.3},
+            fs::read_to_string("res/risc/prime-number.asm")
+                .unwrap()
+                .as_str()
+                .borrow(),
+            map! {RegisterType::A0 => 4},
+            map! {4=>1},
+            3940.,
+        );
+    }
 
     #[test]
     fn test_pipelining_simple() {
@@ -417,62 +461,78 @@ mod tests {
             HashMap::new(),
             0,
             HashMap::new(),
-            "addi t0, zero, 1
-            addi t1, zero, 2
-            addi t2, zero, 3",
-            map! {RegisterType::T0=> 1, RegisterType::T1 => 2, RegisterType::T2 => 3 },
+            "addi t0, zero, 1",
+            map! {RegisterType::T0=> 1},
             HashMap::new(),
-            6.,
+            5.,
         );
     }
 
-    // #[test]
-    // fn test_pipelining_jal() {
-    //     assert(
-    //         HashMap::new(),
-    //         0,
-    //         HashMap::new(),
-    //         "addi t0, zero, 1
-    //         jal t2, foo
-    //         addi t1, zero, 2
-    //         foo:
-    //         addi t2, zero, 3",
-    //         map! {RegisterType::T0=> 1, RegisterType::T1 => 0, RegisterType::T2 => 3 },
-    //         HashMap::new(),
-    //     );
-    // }
-    //
-    // #[test]
-    // fn test_pipelining_conditional_branching_true() {
-    //     assert(
-    //         HashMap::new(),
-    //         0,
-    //         HashMap::new(),
-    //         "addi t0, zero, 1
-    //         addi t1, zero, 1
-    //         beq t0, t1, foo
-    //         addi t1, zero, 2
-    //         foo:
-    //         addi t2, zero, 3",
-    //         map! {RegisterType::T0=> 1, RegisterType::T1 => 1, RegisterType::T2 => 3 },
-    //         HashMap::new(),
-    //     );
-    // }
-    //
-    // #[test]
-    // fn test_pipelining_conditional_branching_false() {
-    //     assert(
-    //         HashMap::new(),
-    //         0,
-    //         HashMap::new(),
-    //         "addi t0, zero, 0
-    //         addi t1, zero, 1
-    //         beq t0, t1, foo
-    //         addi t1, zero, 2
-    //         foo:
-    //         addi t2, zero, 3",
-    //         map! {RegisterType::T0=> 0, RegisterType::T1 => 2, RegisterType::T2 => 3 },
-    //         HashMap::new(),
-    //     );
-    // }
+    #[test]
+    fn test_pipelining_multiple() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi t0, zero, 1
+            addi t1, zero, 2
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 1, RegisterType::T1 => 2, RegisterType::T2 => 3},
+            HashMap::new(),
+            7.,
+        );
+    }
+
+    #[test]
+    fn test_pipelining_jal() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi t0, zero, 1
+            jal t2, foo
+            addi t1, zero, 2
+            foo:
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 1, RegisterType::T1 => 0, RegisterType::T2 => 3 },
+            HashMap::new(),
+            9.,
+        );
+    }
+
+    #[test]
+    fn test_pipelining_conditional_branching_true() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi t0, zero, 1
+            addi t1, zero, 1
+            beq t0, t1, foo
+            addi t1, zero, 2
+            foo:
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 1, RegisterType::T1 => 1, RegisterType::T2 => 3 },
+            HashMap::new(),
+            10.,
+        );
+    }
+
+    #[test]
+    fn test_pipelining_conditional_branching_false() {
+        assert(
+            HashMap::new(),
+            0,
+            HashMap::new(),
+            "addi t0, zero, 0
+            addi t1, zero, 1
+            beq t0, t1, foo
+            addi t1, zero, 2
+            foo:
+            addi t2, zero, 3",
+            map! {RegisterType::T0=> 0, RegisterType::T1 => 2, RegisterType::T2 => 3 },
+            HashMap::new(),
+            9.,
+        );
+    }
 }
