@@ -1,6 +1,8 @@
 mod mvm3;
 
 use crate::opcodes::Application;
+#[macro_use]
+extern crate queues;
 
 mod bit;
 mod mvm1;

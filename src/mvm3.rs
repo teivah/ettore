@@ -1,5 +1,6 @@
 use crate::opcodes::*;
 use crate::VirtualMachine;
+use queues::*;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
@@ -9,37 +10,71 @@ const CYCLES_L1_ACCESS: f32 = 1.;
 const CYCLES_REGISTER_ACCESS: f32 = 1.;
 const CYCLES_DECODE: f32 = 1.;
 
-pub struct Mvm3 {
+pub struct Mvm3<'a> {
     ctx: Context,
     cycles: f32,
 
-    fetch_instruction: FetchInstruction,
-    fetch_instruction_out: Option<usize>,
+    fetch_unit: FetchUnit,
+    decode_bus: Bus<usize>,
+    decode_unit: DecodeUnit,
+    execute_bus: Bus<&'a Box<dyn InstructionRunner>>,
 }
 
-impl VirtualMachine for Mvm3 {
-    fn run(&mut self, application: &Application) -> Result<f32, String> {
+pub struct Bus<T: Clone> {
+    queue: Queue<T>,
+    max: usize,
+}
+
+impl<T: Clone> Bus<T> {
+    fn new(max: usize) -> Self {
+        Bus {
+            queue: queue![],
+            max,
+        }
+    }
+
+    fn add(&mut self, t: T) {
+        self.queue.add(t).unwrap();
+    }
+
+    fn get(&mut self) -> T {
+        self.queue.remove().unwrap()
+    }
+
+    fn is_full(&self) -> bool {
+        self.queue.size() == self.max
+    }
+
+    fn is_empty(&self) -> bool {
+        self.queue.size() == 0
+    }
+}
+
+impl<'a> Mvm3<'a> {
+    fn run(&mut self, application: &'a Application) -> Result<f32, String> {
         let mut cycles: f32 = 0.;
         loop {
             cycles += 1.;
-            let instruction = self
-                .fetch_instruction
-                .cycle(application, self.fetch_instruction_out.is_some());
-            if instruction.is_some() {
-                self.fetch_instruction_out = Some(instruction.unwrap());
-            }
+
+            self.fetch_unit.cycle(application, &mut self.decode_bus);
+            self.decode_unit
+                .cycle(application, &mut self.decode_bus, &mut self.execute_bus);
+
+            // TODO If jump or conditional branching
         }
         return Ok(self.cycles);
     }
 }
 
-impl Mvm3 {
+impl<'a> Mvm3<'a> {
     pub fn new(memory_bytes: usize) -> Self {
         Mvm3 {
             ctx: Context::new(memory_bytes),
             cycles: 0.,
-            fetch_instruction: FetchInstruction::new(),
-            fetch_instruction_out: None,
+            fetch_unit: FetchUnit::new(),
+            decode_bus: Bus::new(1),
+            decode_unit: DecodeUnit::new(),
+            execute_bus: Bus::new(1),
         }
     }
 }
@@ -58,7 +93,7 @@ impl L1I {
     }
 }
 
-struct FetchInstruction {
+struct FetchUnit {
     pc: i32,
     l1i: L1I,
     remaining_cycles: f32,
@@ -66,9 +101,9 @@ struct FetchInstruction {
     processing: bool,
 }
 
-impl FetchInstruction {
+impl FetchUnit {
     fn new() -> Self {
-        FetchInstruction {
+        FetchUnit {
             pc: 0,
             l1i: L1I { boundary: (-1, -1) },
             remaining_cycles: 0.0,
@@ -77,9 +112,9 @@ impl FetchInstruction {
         }
     }
 
-    fn cycle(&mut self, application: &Application, output_bus_blocked: bool) -> Option<usize> {
+    fn cycle(&mut self, application: &Application, out_bus: &mut Bus<usize>) {
         if self.complete {
-            return None;
+            return;
         }
 
         if !self.processing {
@@ -90,15 +125,15 @@ impl FetchInstruction {
                 self.remaining_cycles = CYCLES_MEMORY_ACCESS;
                 // Should be done after the processing of the 50 cycles
                 self.l1i.fetch(self.pc);
-                return None;
+                return;
             }
         }
 
         self.remaining_cycles -= 1.;
-        return if self.remaining_cycles == 0. {
-            if output_bus_blocked {
+        if self.remaining_cycles == 0. {
+            if out_bus.is_full() {
                 self.remaining_cycles = 1.;
-                return None;
+                return;
             }
 
             self.processing = false;
@@ -107,14 +142,30 @@ impl FetchInstruction {
             if self.pc / 4 >= application.instructions.len() as i32 {
                 self.complete = true;
             }
-            Some((current_pc / 4) as usize)
-        } else {
-            None
-        };
+            out_bus.add((current_pc / 4) as usize);
+        }
+    }
+}
+
+struct DecodeUnit {}
+
+impl DecodeUnit {
+    fn new() -> Self {
+        DecodeUnit {}
     }
 
-    fn set_pc(&mut self, pc: i32) {
-        self.pc = pc;
+    fn cycle<'a>(
+        &self,
+        application: &'a Application,
+        in_bus: &mut Bus<usize>,
+        out_bus: &mut Bus<&'a Box<dyn InstructionRunner>>,
+    ) {
+        if in_bus.is_empty() {
+            return;
+        }
+        let idx = in_bus.get();
+        let runner = &application.instructions[idx];
+        out_bus.add(runner);
     }
 }
 

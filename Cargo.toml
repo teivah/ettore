@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 clap = "2"
 enum-map = "0.6.2"
+queues = "1.0.2"
