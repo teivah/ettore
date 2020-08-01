@@ -36,12 +36,20 @@ impl<T: Clone> Bus<T> {
         }
     }
 
+    fn flush(&mut self) {
+        self.queue = queue![];
+    }
+
     fn add(&mut self, t: T) {
         self.queue.add(t).unwrap();
     }
 
     fn get(&mut self) -> T {
         self.queue.remove().unwrap()
+    }
+
+    fn peek(&mut self) -> T {
+        self.queue.peek().unwrap()
     }
 
     fn is_full(&self) -> bool {
@@ -63,6 +71,13 @@ impl<'a> Mvm3<'a> {
             self.decode_unit
                 .cycle(application, &mut self.decode_bus, &mut self.execute_bus);
             // TODO If jump or conditional branching
+            if !self.execute_bus.is_empty() {
+                let runner = self.execute_bus.peek();
+                let instruction_type = runner.instruction_type();
+                if jump(&instruction_type) {
+                } else if conditional_branching(&instruction_type) {
+                }
+            }
             self.execute_unit.cycle(
                 &mut self.ctx,
                 application,
@@ -77,6 +92,8 @@ impl<'a> Mvm3<'a> {
         }
         return Ok(self.cycles);
     }
+
+    fn flush(&mut self) {}
 }
 
 impl<'a> Mvm3<'a> {
@@ -218,6 +235,33 @@ impl WriteUnit {
     }
 
     fn cycle(&self) {}
+}
+
+struct BranchUnit {
+    condition_branching_expected: Option<i32>,
+    condition_branching_register: Option<RegisterType>,
+}
+
+impl BranchUnit {
+    fn new() -> Self {
+        BranchUnit {
+            condition_branching_expected: None,
+            condition_branching_register: None,
+        }
+    }
+
+    fn set_expectaction(&mut self, expected: i32, register: RegisterType) {
+        self.condition_branching_expected = Some(expected);
+        self.condition_branching_register = Some(register);
+    }
+
+    fn assert(&mut self, ctx: &Context) -> bool {
+        let assert = self.condition_branching_expected.unwrap()
+            == ctx.registers[self.condition_branching_register.unwrap()];
+        self.condition_branching_expected = None;
+        self.condition_branching_register = None;
+        assert
+    }
 }
 
 #[cfg(test)]
