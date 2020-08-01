@@ -956,8 +956,7 @@ pub fn cycles_per_instruction(instruction_type: InstructionType) -> f32 {
         InstructionType::LUI => 1.,
         InstructionType::LB => 50.,
         InstructionType::LH => 50.,
-        // TODO
-        InstructionType::LW => 1.,
+        InstructionType::LW => 50.,
         InstructionType::NOP => 1.,
         InstructionType::MUL => 1.,
         InstructionType::OR => 1.,

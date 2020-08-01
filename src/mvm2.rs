@@ -3,10 +3,11 @@ use crate::VirtualMachine;
 use std::collections::HashMap;
 use std::fs;
 
-const CYCLES_MEMORY_ACCESS: f32 = 50.;
 const CYCLES_L1_ACCESS: f32 = 1.;
+const CYCLES_MEMORY_ACCESS: f32 = 50. + CYCLES_L1_ACCESS;
 const CYCLES_REGISTER_ACCESS: f32 = 1.;
 const CYCLES_DECODE: f32 = 1.;
+const L1I_SIZE: i32 = 64;
 
 pub struct Mvm2 {
     ctx: Context,
@@ -54,7 +55,7 @@ impl Mvm2 {
 
     fn fetch_l1i(&mut self) {
         self.cycles += CYCLES_MEMORY_ACCESS;
-        self.l1i = (self.ctx.pc, self.ctx.pc + 64);
+        self.l1i = (self.ctx.pc, self.ctx.pc + L1I_SIZE);
     }
 
     fn decode<'a>(

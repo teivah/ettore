@@ -5,10 +5,11 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
 
-const CYCLES_MEMORY_ACCESS: f32 = 2.;
 const CYCLES_L1_ACCESS: f32 = 1.;
+const CYCLES_MEMORY_ACCESS: f32 = 50. + CYCLES_L1_ACCESS;
 const CYCLES_REGISTER_ACCESS: f32 = 1.;
 const CYCLES_DECODE: f32 = 1.;
+const L1I_SIZE: i32 = 64;
 
 pub struct Mvm3<'a> {
     ctx: Context,
@@ -77,7 +78,7 @@ impl<T: Clone> Bus<T> {
 }
 
 impl<'a> Mvm3<'a> {
-    fn run(&mut self, application: &'a Application) -> Result<f32, String> {
+    pub fn run(&mut self, application: &'a Application) -> Result<f32, String> {
         let mut cycles: f32 = 0.;
         loop {
             cycles += 1.;
@@ -124,6 +125,7 @@ impl<'a> Mvm3<'a> {
             if execute.is_some() {
                 if self.branch_unit.pipeline_to_be_flushed(&self.ctx) {
                     self.flush(self.ctx.pc);
+                    continue;
                 }
             }
 
@@ -145,6 +147,7 @@ impl<'a> Mvm3<'a> {
     fn flush(&mut self, pc: i32) {
         self.fetch_unit.flush(pc);
         self.decode_bus_in.flush();
+        self.decode_bus_out.flush();
         self.decode_unit.flush();
         self.execute_bus_in.flush();
         self.write_bus_in.flush();
@@ -190,7 +193,7 @@ impl L1I {
     }
 
     fn fetch(&mut self, pc: i32) {
-        self.boundary = (pc, pc + 64);
+        self.boundary = (pc, pc + 512);
     }
 }
 
@@ -451,7 +454,23 @@ mod tests {
                 .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>1},
-            3940.,
+            4037.,
+        );
+    }
+
+    #[test]
+    fn test_prime_number_1109() {
+        assert(
+            HashMap::new(),
+            5,
+            HashMap::new(),
+            fs::read_to_string("res/risc/prime-number-1109.asm")
+                .unwrap()
+                .as_str()
+                .borrow(),
+            map! {RegisterType::A0 => 4},
+            map! {4=>1},
+            4088.,
         );
     }
 
@@ -464,7 +483,7 @@ mod tests {
             "addi t0, zero, 1",
             map! {RegisterType::T0=> 1},
             HashMap::new(),
-            5.,
+            53.,
         );
     }
 
@@ -479,7 +498,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 2, RegisterType::T2 => 3},
             HashMap::new(),
-            7.,
+            55.,
         );
     }
 
@@ -496,7 +515,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 0, RegisterType::T2 => 3 },
             HashMap::new(),
-            9.,
+            57.,
         );
     }
 
@@ -514,7 +533,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 1, RegisterType::T2 => 3 },
             HashMap::new(),
-            10.,
+            58.,
         );
     }
 
@@ -532,7 +551,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 0, RegisterType::T1 => 2, RegisterType::T2 => 3 },
             HashMap::new(),
-            9.,
+            57.,
         );
     }
 }
