@@ -454,7 +454,7 @@ mod tests {
                 .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>1},
-            4037.,
+            4038.,
         );
     }
 
@@ -470,7 +470,7 @@ mod tests {
                 .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>1},
-            4088.,
+            4089.,
         );
     }
 
@@ -483,7 +483,7 @@ mod tests {
             "addi t0, zero, 1",
             map! {RegisterType::T0=> 1},
             HashMap::new(),
-            53.,
+            54.,
         );
     }
 
@@ -498,7 +498,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 2, RegisterType::T2 => 3},
             HashMap::new(),
-            55.,
+            56.,
         );
     }
 
@@ -515,7 +515,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 0, RegisterType::T2 => 3 },
             HashMap::new(),
-            57.,
+            58.,
         );
     }
 
@@ -533,7 +533,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 1, RegisterType::T2 => 3 },
             HashMap::new(),
-            58.,
+            59.,
         );
     }
 
@@ -551,7 +551,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 0, RegisterType::T1 => 2, RegisterType::T2 => 3 },
             HashMap::new(),
-            57.,
+            58.,
         );
     }
 }
