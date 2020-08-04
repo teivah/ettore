@@ -75,6 +75,10 @@ impl<T: Clone> Bus<T> {
         self.queue.size() != 0
     }
 
+    fn contains_element_in_entry(&self) -> bool {
+        self.entry.size() != 0
+    }
+
     fn connect(&mut self) {
         if self.queue.size() == self.max {
             return;
@@ -117,20 +121,22 @@ impl<'a> Mvm3<'a> {
                     self.branch_unit.conditional_branching(self.ctx.pc + 4)
                 }
             }
-            let execute = self.execute_unit.cycle(
+            self.execute_unit.cycle(
                 &mut self.ctx,
                 application,
                 &mut self.execute_bus,
                 &mut self.write_bus,
             )?;
 
-            self.write_bus.connect();
-            if execute.is_some() {
-                if self.branch_unit.pipeline_to_be_flushed(&self.ctx) {
-                    self.flush(self.ctx.pc);
-                    continue;
-                }
+            if self
+                .branch_unit
+                .pipeline_to_be_flushed(&self.ctx, &self.write_bus)
+            {
+                self.flush(self.ctx.pc);
+                continue;
             }
+
+            self.write_bus.connect();
             if self.write_bus.contains_element_in_queue() && write_back(self.write_bus.get()) {
                 self.write_unit.cycle();
             }
@@ -304,10 +310,10 @@ impl<'a> ExecuteUnit<'a> {
         application: &Application,
         in_bus: &mut Bus<&'a Box<dyn InstructionRunner>>,
         out_bus: &mut Bus<InstructionType>,
-    ) -> Result<Option<()>, String> {
+    ) -> Result<(), String> {
         if !self.processing {
             if !in_bus.contains_element_in_queue() {
-                return Ok(None);
+                return Ok(());
             }
 
             let runner = in_bus.get();
@@ -318,12 +324,12 @@ impl<'a> ExecuteUnit<'a> {
 
         self.remaining_cycles -= 1.;
         if self.remaining_cycles != 0. {
-            return Ok(None);
+            return Ok(());
         }
 
         if out_bus.is_full() {
             self.remaining_cycles = 1.;
-            return Ok(None);
+            return Ok(());
         }
 
         self.processing = false;
@@ -332,7 +338,7 @@ impl<'a> ExecuteUnit<'a> {
         ctx.pc = pc;
         out_bus.add(vec![runner.instruction_type()]);
         self.runner = None;
-        return Ok(Some(()));
+        return Ok(());
     }
 
     fn flush(&mut self) {}
@@ -377,7 +383,11 @@ impl BranchUnit {
         self.jump = true;
     }
 
-    fn pipeline_to_be_flushed(&mut self, ctx: &Context) -> bool {
+    fn pipeline_to_be_flushed(&mut self, ctx: &Context, write_bus: &Bus<InstructionType>) -> bool {
+        if !write_bus.contains_element_in_entry() {
+            return false;
+        }
+
         let mut conditional_branching = false;
         if self.condition_branching_expected.is_some() {
             conditional_branching = self.condition_branching_expected.unwrap() != ctx.pc;
