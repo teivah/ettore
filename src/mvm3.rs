@@ -15,19 +15,18 @@ pub struct Mvm3<'a> {
     ctx: Context,
 
     fetch_unit: FetchUnit,
-    fetch_bus_out: Bus<usize>,
-    decode_bus_in: Bus<usize>,
+    decode_bus: Bus<usize>,
     decode_unit: DecodeUnit,
-    decode_bus_out: Bus<&'a Box<dyn InstructionRunner>>,
-    execute_bus_in: Bus<&'a Box<dyn InstructionRunner>>,
+    execute_bus: Bus<&'a Box<dyn InstructionRunner>>,
     execute_unit: ExecuteUnit<'a>,
-    execute_bus_out: Bus<InstructionType>,
-    write_bus_in: Bus<InstructionType>,
+    write_bus: Bus<InstructionType>,
     write_unit: WriteUnit,
     branch_unit: BranchUnit,
 }
 
 pub struct Bus<T: Clone> {
+    entry: Queue<Vec<T>>,
+    buffer: Queue<Vec<T>>,
     queue: Queue<T>,
     max: usize,
 }
@@ -35,17 +34,21 @@ pub struct Bus<T: Clone> {
 impl<T: Clone> Bus<T> {
     fn new(max: usize) -> Self {
         Bus {
+            entry: queue![],
+            buffer: queue![],
             queue: queue![],
             max,
         }
     }
 
     fn flush(&mut self) {
+        self.entry = queue![];
+        self.buffer = queue![];
         self.queue = queue![];
     }
 
-    fn add(&mut self, t: T) {
-        self.queue.add(t).unwrap();
+    fn add(&mut self, t: Vec<T>) {
+        self.entry.add(t).unwrap();
     }
 
     fn get(&mut self) -> T {
@@ -65,15 +68,31 @@ impl<T: Clone> Bus<T> {
     }
 
     fn is_empty(&self) -> bool {
-        self.queue.size() == 0
+        self.queue.size() == 0 && self.buffer.size() == 0 && self.entry.size() == 0
     }
 
-    fn connect(&mut self, dest: &mut Bus<T>) -> bool {
-        if !self.is_empty() && !dest.is_full() {
-            dest.add(self.get());
-            return dest.size() == 1;
+    fn contains_element_in_queue(&self) -> bool {
+        self.queue.size() != 0
+    }
+
+    fn connect(&mut self) {
+        if self.queue.size() == self.max {
+            return;
         }
-        return false;
+
+        while self.buffer.size() != 0 {
+            let list = self.buffer.remove().unwrap();
+            for elem in list {
+                self.queue.add(elem);
+            }
+        }
+        self.buffer = queue![];
+
+        while self.entry.size() != 0 {
+            let list = self.entry.remove().unwrap();
+            self.buffer.add(list);
+        }
+        self.entry = queue![];
     }
 }
 
@@ -82,59 +101,38 @@ impl<'a> Mvm3<'a> {
         let mut cycles: f32 = 0.;
         loop {
             cycles += 1.;
-            self.fetch_unit.cycle(application, &mut self.fetch_bus_out);
-            if self.fetch_bus_out.connect(&mut self.decode_bus_in) {
-                // If there was a connection (a data exchanged between the buses),
-                // we wait for another cycle before to give the target unit the data.
-                self.decode_unit
-                    .cycle(application, &mut Bus::new(0), &mut self.decode_bus_out);
-            } else {
-                self.decode_unit.cycle(
-                    application,
-                    &mut self.decode_bus_in,
-                    &mut self.decode_bus_out,
-                );
-            }
+            self.fetch_unit.cycle(application, &mut self.decode_bus);
 
-            let mut execute: Option<()>;
-            if self.decode_bus_out.connect(&mut self.execute_bus_in) {
-                execute = self.execute_unit.cycle(
-                    &mut self.ctx,
-                    application,
-                    &mut Bus::new(0),
-                    &mut self.execute_bus_out,
-                )?;
-            } else {
-                if !self.execute_bus_in.is_empty() {
-                    let runner = self.execute_bus_in.peek();
-                    let instruction_type = runner.instruction_type();
-                    if jump(&instruction_type) {
-                        self.branch_unit.jump();
-                    } else if conditional_branching(&instruction_type) {
-                        self.branch_unit.conditional_branching(self.ctx.pc + 4)
-                    }
+            self.decode_bus.connect();
+            self.decode_unit
+                .cycle(application, &mut self.decode_bus, &mut self.execute_bus);
+
+            self.execute_bus.connect();
+            if self.execute_bus.contains_element_in_queue() {
+                let runner = self.execute_bus.peek();
+                let instruction_type = runner.instruction_type();
+                if jump(&instruction_type) {
+                    self.branch_unit.jump();
+                } else if conditional_branching(&instruction_type) {
+                    self.branch_unit.conditional_branching(self.ctx.pc + 4)
                 }
-                execute = self.execute_unit.cycle(
-                    &mut self.ctx,
-                    application,
-                    &mut self.execute_bus_in,
-                    &mut self.execute_bus_out,
-                )?;
             }
+            let execute = self.execute_unit.cycle(
+                &mut self.ctx,
+                application,
+                &mut self.execute_bus,
+                &mut self.write_bus,
+            )?;
 
+            self.write_bus.connect();
             if execute.is_some() {
                 if self.branch_unit.pipeline_to_be_flushed(&self.ctx) {
                     self.flush(self.ctx.pc);
                     continue;
                 }
             }
-
-            if !self.execute_bus_out.connect(&mut self.write_bus_in) {
-                if !self.write_bus_in.is_empty() {
-                    if write_back(self.write_bus_in.get()) {
-                        self.write_unit.cycle();
-                    }
-                }
+            if self.write_bus.contains_element_in_queue() && write_back(self.write_bus.get()) {
+                self.write_unit.cycle();
             }
 
             if self.is_complete() {
@@ -146,11 +144,10 @@ impl<'a> Mvm3<'a> {
 
     fn flush(&mut self, pc: i32) {
         self.fetch_unit.flush(pc);
-        self.decode_bus_in.flush();
-        self.decode_bus_out.flush();
         self.decode_unit.flush();
-        self.execute_bus_in.flush();
-        self.write_bus_in.flush();
+        self.decode_bus.flush();
+        self.execute_bus.flush();
+        self.write_bus.flush();
     }
 
     fn is_complete(&self) -> bool {
@@ -158,9 +155,9 @@ impl<'a> Mvm3<'a> {
             && self.decode_unit.is_empty()
             && self.execute_unit.is_empty()
             && self.write_unit.is_empty()
-            && self.decode_bus_in.is_empty()
-            && self.execute_bus_in.is_empty()
-            && self.write_bus_in.is_empty()
+            && self.decode_bus.is_empty()
+            && self.execute_bus.is_empty()
+            && self.write_bus.is_empty()
     }
 }
 
@@ -169,14 +166,11 @@ impl<'a> Mvm3<'a> {
         Mvm3 {
             ctx: Context::new(memory_bytes),
             fetch_unit: FetchUnit::new(),
-            fetch_bus_out: Bus::new(1),
-            decode_bus_in: Bus::new(2),
+            decode_bus: Bus::new(1),
             decode_unit: DecodeUnit::new(),
-            decode_bus_out: Bus::new(1),
-            execute_bus_in: Bus::new(2),
+            execute_bus: Bus::new(1),
             execute_unit: ExecuteUnit::new(),
-            execute_bus_out: Bus::new(1),
-            write_bus_in: Bus::new(2),
+            write_bus: Bus::new(1),
             write_unit: WriteUnit::new(),
             branch_unit: BranchUnit::new(),
         }
@@ -245,7 +239,7 @@ impl FetchUnit {
             if self.pc / 4 >= application.instructions.len() as i32 {
                 self.complete = true;
             }
-            out_bus.add((current_pc / 4) as usize);
+            out_bus.add(vec![(current_pc / 4) as usize]);
         }
     }
 
@@ -273,12 +267,12 @@ impl DecodeUnit {
         in_bus: &mut Bus<usize>,
         out_bus: &mut Bus<&'a Box<dyn InstructionRunner>>,
     ) {
-        if in_bus.is_empty() {
+        if !in_bus.contains_element_in_queue() {
             return;
         }
         let idx = in_bus.get();
         let runner = &application.instructions[idx];
-        out_bus.add(runner);
+        out_bus.add(vec![runner]);
     }
 
     fn flush(&mut self) {}
@@ -312,7 +306,7 @@ impl<'a> ExecuteUnit<'a> {
         out_bus: &mut Bus<InstructionType>,
     ) -> Result<Option<()>, String> {
         if !self.processing {
-            if in_bus.is_empty() {
+            if !in_bus.contains_element_in_queue() {
                 return Ok(None);
             }
 
@@ -336,7 +330,7 @@ impl<'a> ExecuteUnit<'a> {
         let runner = self.runner.unwrap();
         let pc = runner.run(ctx, &application.labels)?;
         ctx.pc = pc;
-        out_bus.add(runner.instruction_type());
+        out_bus.add(vec![runner.instruction_type()]);
         self.runner = None;
         return Ok(Some(()));
     }
