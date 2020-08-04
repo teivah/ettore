@@ -105,22 +105,23 @@ impl<'a> Mvm3<'a> {
         let mut cycles: f32 = 0.;
         loop {
             cycles += 1.;
+
+            // Fetch
             self.fetch_unit.cycle(application, &mut self.decode_bus);
 
+            // Decode
             self.decode_bus.connect();
             self.decode_unit
                 .cycle(application, &mut self.decode_bus, &mut self.execute_bus);
 
+            // Execute
             self.execute_bus.connect();
-            if self.execute_bus.contains_element_in_queue() {
-                let runner = self.execute_bus.peek();
-                let instruction_type = runner.instruction_type();
-                if jump(&instruction_type) {
-                    self.branch_unit.jump();
-                } else if conditional_branching(&instruction_type) {
-                    self.branch_unit.conditional_branching(self.ctx.pc + 4)
-                }
-            }
+
+            // Create branch unit assertions
+            self.branch_unit
+                .assert(&mut self.ctx, &mut self.execute_bus);
+
+            // Execute
             self.execute_unit.cycle(
                 &mut self.ctx,
                 application,
@@ -128,6 +129,7 @@ impl<'a> Mvm3<'a> {
                 &mut self.write_bus,
             )?;
 
+            // Branch unit assertions check
             if self
                 .branch_unit
                 .pipeline_to_be_flushed(&self.ctx, &self.write_bus)
@@ -136,6 +138,7 @@ impl<'a> Mvm3<'a> {
                 continue;
             }
 
+            // Write back
             self.write_bus.connect();
             if self.write_bus.contains_element_in_queue() && write_back(self.write_bus.get()) {
                 self.write_unit.cycle();
@@ -367,7 +370,7 @@ struct BranchUnit {
     jump: bool,
 }
 
-impl BranchUnit {
+impl<'a> BranchUnit {
     fn new() -> Self {
         BranchUnit {
             condition_branching_expected: None,
@@ -375,12 +378,24 @@ impl BranchUnit {
         }
     }
 
-    fn conditional_branching(&mut self, expected: i32) {
-        self.condition_branching_expected = Some(expected);
+    fn assert(&mut self, ctx: &mut Context, execute_bus: &mut Bus<&'a Box<dyn InstructionRunner>>) {
+        if execute_bus.contains_element_in_queue() {
+            let runner = execute_bus.peek();
+            let instruction_type = runner.instruction_type();
+            if jump(&instruction_type) {
+                self.jump();
+            } else if conditional_branching(&instruction_type) {
+                self.conditional_branching(ctx.pc + 4)
+            }
+        }
     }
 
     fn jump(&mut self) {
         self.jump = true;
+    }
+
+    fn conditional_branching(&mut self, expected: i32) {
+        self.condition_branching_expected = Some(expected);
     }
 
     fn pipeline_to_be_flushed(&mut self, ctx: &Context, write_bus: &Bus<InstructionType>) -> bool {
