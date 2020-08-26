@@ -97,7 +97,7 @@ In this case, we implement what we call pipeline interclock by delaying the exec
 +-----+     +---+---+            |
                 |         +------v------+
                 |         | Branch Unit |
-                |         +------^------+
+                |         +-------------+
             +---v----+           |
             | Decode <-----------+
             +---+----+
