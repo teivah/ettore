@@ -1,10 +1,6 @@
 mod mvm3;
 
 use crate::opcodes::Application;
-#[macro_use]
-extern crate queues;
-
-use log::info;
 
 mod bit;
 mod mvm1;
@@ -19,10 +15,12 @@ trait VirtualMachine {
     fn run(&mut self, application: &Application) -> Result<f32, String>;
 }
 
-fn main() {}
+fn main() {
+    env_logger::init();
+}
 
 #[cfg(test)]
-mod testdads {
+mod tests {
     use super::*;
     use crate::mvm1::Mvm1;
     use crate::mvm2::Mvm2;
@@ -39,7 +37,7 @@ mod testdads {
     fn stats(test: &str, cycles: f32) {
         let s = cycles / I5_7360U as f32;
         let ns = s * SECOND_TO_NANOSECOND as f32;
-        info!("{}: {} cycles, {:.2} nanoseconds", test, cycles, ns);
+        log::info!("{}: {} cycles, {:.2} nanoseconds", test, cycles, ns);
     }
 
     #[test]

@@ -1,17 +1,12 @@
 use crate::opcodes::*;
-use crate::VirtualMachine;
-use log::info;
 use queues::*;
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fmt;
-use std::fmt::Display;
 use std::fs;
+use std::sync::Once;
 
 const CYCLES_L1_ACCESS: f32 = 1.;
 const CYCLES_MEMORY_ACCESS: f32 = 50. + CYCLES_L1_ACCESS;
-const CYCLES_REGISTER_ACCESS: f32 = 1.;
-const CYCLES_DECODE: f32 = 1.;
 const L1I_SIZE: i32 = 64;
 
 pub struct Mvm3<'a> {
@@ -62,10 +57,6 @@ impl<T: Clone> Bus<T> {
         self.queue.peek().unwrap()
     }
 
-    fn size(&mut self) -> usize {
-        self.queue.size()
-    }
-
     fn is_full(&self) -> bool {
         self.queue.size() == self.max || self.entry.size() == self.max
     }
@@ -94,14 +85,14 @@ impl<T: Clone> Bus<T> {
         while self.buffer.size() != 0 {
             let list = self.buffer.remove().unwrap();
             for elem in list {
-                self.queue.add(elem);
+                self.queue.add(elem).unwrap();
             }
         }
         self.buffer = queue![];
 
         while self.entry.size() != 0 {
             let list = self.entry.remove().unwrap();
-            self.buffer.add(list);
+            self.buffer.add(list).unwrap();
         }
         self.entry = queue![];
     }
@@ -124,7 +115,7 @@ impl<'a> Mvm3<'a> {
         let mut cycles: f32 = 0.;
         loop {
             cycles += 1.;
-            // self.log(cycles);
+            self.log(cycles);
 
             // Fetch
             self.fetch_unit.cycle(application, &mut self.decode_bus);
@@ -214,17 +205,19 @@ impl<'a> Mvm3<'a> {
     }
 
     fn log(&self, cycles: f32) {
-        info!("cycles={}", cycles);
-        info!(
+        log::debug!("cycles={}", cycles);
+        log::debug!(
             "t0={},t1={},t2={},t3={}",
             self.ctx.registers[RegisterType::T0],
             self.ctx.registers[RegisterType::T1],
             self.ctx.registers[RegisterType::T2],
             self.ctx.registers[RegisterType::T3]
         );
-        info!(
+        log::debug!(
             "decode: {}, execute: {}, write: {}",
-            self.decode_bus, self.execute_bus, self.write_bus
+            self.decode_bus,
+            self.execute_bus,
+            self.write_bus
         );
     }
 }
@@ -393,7 +386,7 @@ impl<'a> ExecuteUnit<'a> {
             return Ok(());
         }
 
-        info!(
+        log::debug!(
             "execute {:?} {:?} {:?}",
             runner.instruction_type(),
             runner.write_registers(),
@@ -413,15 +406,10 @@ impl<'a> ExecuteUnit<'a> {
         return Ok(());
     }
 
-    fn flush(&mut self) {}
-
     fn is_empty(&self) -> bool {
         !self.processing
     }
 }
-
-// TODO https://en.wikipedia.org/wiki/Classic_RISC_pipeline#Writeback
-// Problem: read after write
 
 struct WriteUnit {}
 
@@ -437,9 +425,10 @@ impl WriteUnit {
 
         let execution = write_bus.get();
         if write_back(&execution.instruction_type) {
-            info!(
+            log::debug!(
                 "write value {} to register {:?}",
-                execution.execution.value, execution.execution.register
+                execution.execution.value,
+                execution.execution.register
             );
             ctx.write(&execution.execution);
             ctx.delete_write_registers(&execution.write_registers)
@@ -519,6 +508,14 @@ mod tests {
      };
 );
 
+    static INIT: Once = Once::new();
+
+    fn setup() {
+        INIT.call_once(|| {
+            env_logger::init();
+        });
+    }
+
     fn assert(
         init_registers: HashMap<RegisterType, i32>,
         memory_bytes: usize,
@@ -548,7 +545,7 @@ mod tests {
 
     #[test]
     fn test_prime_number() {
-        let bits = bytes_from_low_bits(2);
+        let bits = bytes_from_low_bits(1109);
         assert(
             HashMap::new(),
             5,
@@ -559,7 +556,7 @@ mod tests {
                 .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>1},
-            4038.,
+            5149.,
         );
     }
 
@@ -575,12 +572,13 @@ mod tests {
                 .borrow(),
             map! {RegisterType::A0 => 4},
             map! {4=>1},
-            4089.,
+            5200.,
         );
     }
 
     #[test]
     fn test_pipelining_simple() {
+        setup();
         assert(
             HashMap::new(),
             0,
@@ -594,6 +592,7 @@ mod tests {
 
     #[test]
     fn test_pipelining_multiple() {
+        setup();
         assert(
             HashMap::new(),
             0,
@@ -609,6 +608,7 @@ mod tests {
 
     #[test]
     fn test_pipelining_jal() {
+        setup();
         assert(
             HashMap::new(),
             0,
@@ -620,12 +620,13 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 0, RegisterType::T2 => 3 },
             HashMap::new(),
-            58.,
+            59.,
         );
     }
 
     #[test]
     fn test_pipelining_conditional_branching_true() {
+        setup();
         assert(
             HashMap::new(),
             0,
@@ -638,12 +639,13 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 1, RegisterType::T1 => 1, RegisterType::T2 => 3 },
             HashMap::new(),
-            59.,
+            61.,
         );
     }
 
     #[test]
     fn test_pipelining_conditional_branching_false() {
+        setup();
         assert(
             HashMap::new(),
             0,
@@ -656,7 +658,7 @@ mod tests {
             addi t2, zero, 3",
             map! {RegisterType::T0=> 0, RegisterType::T1 => 2, RegisterType::T2 => 3 },
             HashMap::new(),
-            58.,
+            59.,
         );
     }
 }
