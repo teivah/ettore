@@ -542,39 +542,39 @@ mod tests {
             assert_eq!(assertion.1, runner.ctx.memory[assertion.0]);
         }
     }
-    //
-    // #[test]
-    // fn test_prime_number() {
-    //     let bits = bytes_from_low_bits(1109);
-    //     assert(
-    //         HashMap::new(),
-    //         5,
-    //         map! {0 => bits.0,1 => bits.1,2 => bits.2,3 => bits.3},
-    //         fs::read_to_string("res/risc/prime-number.asm")
-    //             .unwrap()
-    //             .as_str()
-    //             .borrow(),
-    //         map! {RegisterType::A0 => 4},
-    //         map! {4=>1},
-    //         5149.,
-    //     );
-    // }
-    //
-    // #[test]
-    // fn test_prime_number_1109() {
-    //     assert(
-    //         HashMap::new(),
-    //         5,
-    //         HashMap::new(),
-    //         fs::read_to_string("res/risc/prime-number-1109.asm")
-    //             .unwrap()
-    //             .as_str()
-    //             .borrow(),
-    //         map! {RegisterType::A0 => 4},
-    //         map! {4=>1},
-    //         5200.,
-    //     );
-    // }
+
+    #[test]
+    fn test_prime_number() {
+        let bits = bytes_from_low_bits(1109);
+        assert(
+            HashMap::new(),
+            5,
+            map! {0 => bits.0,1 => bits.1,2 => bits.2,3 => bits.3},
+            fs::read_to_string("res/risc/prime-number.asm")
+                .unwrap()
+                .as_str()
+                .borrow(),
+            map! {RegisterType::A0 => 4},
+            map! {4=>1},
+            5149.,
+        );
+    }
+
+    #[test]
+    fn test_prime_number_1109() {
+        assert(
+            HashMap::new(),
+            5,
+            HashMap::new(),
+            fs::read_to_string("res/risc/prime-number-1109.asm")
+                .unwrap()
+                .as_str()
+                .borrow(),
+            map! {RegisterType::A0 => 4},
+            map! {4=>1},
+            5200.,
+        );
+    }
 
     #[test]
     fn test_pipelining_simple() {
