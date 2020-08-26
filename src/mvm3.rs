@@ -1,8 +1,11 @@
 use crate::opcodes::*;
 use crate::VirtualMachine;
+use log::info;
 use queues::*;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::fmt;
+use std::fmt::Display;
 use std::fs;
 
 const CYCLES_L1_ACCESS: f32 = 1.;
@@ -19,7 +22,7 @@ pub struct Mvm3<'a> {
     decode_unit: DecodeUnit,
     execute_bus: Bus<&'a Box<dyn InstructionRunner>>,
     execute_unit: ExecuteUnit<'a>,
-    write_bus: Bus<InstructionType>,
+    write_bus: Bus<ExecutionContext>,
     write_unit: WriteUnit,
     branch_unit: BranchUnit,
 }
@@ -64,11 +67,15 @@ impl<T: Clone> Bus<T> {
     }
 
     fn is_full(&self) -> bool {
-        self.queue.size() == self.max
+        self.queue.size() == self.max || self.entry.size() == self.max
     }
 
     fn is_empty(&self) -> bool {
         self.queue.size() == 0 && self.buffer.size() == 0 && self.entry.size() == 0
+    }
+
+    fn contains_element_in_buffer(&self) -> bool {
+        self.buffer.size() != 0
     }
 
     fn contains_element_in_queue(&self) -> bool {
@@ -100,11 +107,24 @@ impl<T: Clone> Bus<T> {
     }
 }
 
+impl<T: Clone> fmt::Display for Bus<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "entry={},queue={},buffer={}",
+            self.entry.size(),
+            self.queue.size(),
+            self.buffer.size()
+        )
+    }
+}
+
 impl<'a> Mvm3<'a> {
     pub fn run(&mut self, application: &'a Application) -> Result<f32, String> {
         let mut cycles: f32 = 0.;
         loop {
             cycles += 1.;
+            // self.log(cycles);
 
             // Fetch
             self.fetch_unit.cycle(application, &mut self.decode_bus);
@@ -130,20 +150,28 @@ impl<'a> Mvm3<'a> {
             )?;
 
             // Branch unit assertions check
+            let mut flush = false;
             if self
                 .branch_unit
                 .pipeline_to_be_flushed(&self.ctx, &self.write_bus)
             {
-                self.flush(self.ctx.pc);
-                continue;
+                flush = true;
             }
 
             // Write back
             self.write_bus.connect();
-            if self.write_bus.contains_element_in_queue() && write_back(self.write_bus.get()) {
-                self.write_unit.cycle();
-            }
+            self.write_unit.cycle(&mut self.ctx, &mut self.write_bus);
 
+            if flush {
+                if self.write_bus.contains_element_in_buffer() {
+                    // We need to waste a cycle to write the element in the queue buffer
+                    cycles += 1.;
+                    self.write_bus.connect();
+                    self.write_unit.cycle(&mut self.ctx, &mut self.write_bus);
+                }
+
+                self.flush(self.ctx.pc);
+            }
             if self.is_complete() {
                 break;
             }
@@ -183,6 +211,21 @@ impl<'a> Mvm3<'a> {
             write_unit: WriteUnit::new(),
             branch_unit: BranchUnit::new(),
         }
+    }
+
+    fn log(&self, cycles: f32) {
+        info!("cycles={}", cycles);
+        info!(
+            "t0={},t1={},t2={},t3={}",
+            self.ctx.registers[RegisterType::T0],
+            self.ctx.registers[RegisterType::T1],
+            self.ctx.registers[RegisterType::T2],
+            self.ctx.registers[RegisterType::T3]
+        );
+        info!(
+            "decode: {}, execute: {}, write: {}",
+            self.decode_bus, self.execute_bus, self.write_bus
+        );
     }
 }
 
@@ -276,7 +319,7 @@ impl DecodeUnit {
         in_bus: &mut Bus<usize>,
         out_bus: &mut Bus<&'a Box<dyn InstructionRunner>>,
     ) {
-        if !in_bus.contains_element_in_queue() {
+        if !in_bus.contains_element_in_queue() || out_bus.is_full() {
             return;
         }
         let idx = in_bus.get();
@@ -298,6 +341,13 @@ struct ExecuteUnit<'a> {
     runner: Option<&'a Box<dyn InstructionRunner>>,
 }
 
+#[derive(Clone)]
+struct ExecutionContext {
+    execution: Execution,
+    instruction_type: InstructionType,
+    write_registers: Vec<RegisterType>,
+}
+
 impl<'a> ExecuteUnit<'a> {
     fn new() -> Self {
         ExecuteUnit {
@@ -312,7 +362,7 @@ impl<'a> ExecuteUnit<'a> {
         ctx: &mut Context,
         application: &Application,
         in_bus: &mut Bus<&'a Box<dyn InstructionRunner>>,
-        out_bus: &mut Bus<InstructionType>,
+        out_bus: &mut Bus<ExecutionContext>,
     ) -> Result<(), String> {
         if !self.processing {
             if !in_bus.contains_element_in_queue() {
@@ -335,12 +385,31 @@ impl<'a> ExecuteUnit<'a> {
             return Ok(());
         }
 
-        self.processing = false;
         let runner = self.runner.unwrap();
-        let pc = runner.run(ctx, &application.labels)?;
-        ctx.pc = pc;
-        out_bus.add(vec![runner.instruction_type()]);
+
+        // To avoid writeback hazard, if the pipeline contains read registers not written yet, we wait for it.
+        if ctx.contain_written_registers(&runner.read_registers()) {
+            self.remaining_cycles = 1.;
+            return Ok(());
+        }
+
+        info!(
+            "execute {:?} {:?} {:?}",
+            runner.instruction_type(),
+            runner.write_registers(),
+            ctx.read_registers,
+        );
+
+        let execution = runner.run(ctx, &application.labels)?;
+        ctx.pc = execution.pc;
+        out_bus.add(vec![ExecutionContext {
+            execution,
+            instruction_type: runner.instruction_type(),
+            write_registers: runner.write_registers(),
+        }]);
+        ctx.add_write_registers(runner.write_registers());
         self.runner = None;
+        self.processing = false;
         return Ok(());
     }
 
@@ -351,6 +420,9 @@ impl<'a> ExecuteUnit<'a> {
     }
 }
 
+// TODO https://en.wikipedia.org/wiki/Classic_RISC_pipeline#Writeback
+// Problem: read after write
+
 struct WriteUnit {}
 
 impl WriteUnit {
@@ -358,7 +430,21 @@ impl WriteUnit {
         WriteUnit {}
     }
 
-    fn cycle(&self) {}
+    fn cycle(&mut self, ctx: &mut Context, write_bus: &mut Bus<ExecutionContext>) {
+        if !write_bus.contains_element_in_queue() {
+            return;
+        }
+
+        let execution = write_bus.get();
+        if write_back(&execution.instruction_type) {
+            info!(
+                "write value {} to register {:?}",
+                execution.execution.value, execution.execution.register
+            );
+            ctx.write(&execution.execution);
+            ctx.delete_write_registers(&execution.write_registers)
+        }
+    }
 
     fn is_empty(&self) -> bool {
         true
@@ -398,7 +484,7 @@ impl<'a> BranchUnit {
         self.condition_branching_expected = Some(expected);
     }
 
-    fn pipeline_to_be_flushed(&mut self, ctx: &Context, write_bus: &Bus<InstructionType>) -> bool {
+    fn pipeline_to_be_flushed(&mut self, ctx: &Context, write_bus: &Bus<ExecutionContext>) -> bool {
         if !write_bus.contains_element_in_entry() {
             return false;
         }
@@ -462,7 +548,7 @@ mod tests {
 
     #[test]
     fn test_prime_number() {
-        let bits = bytes_from_low_bits(1109);
+        let bits = bytes_from_low_bits(2);
         assert(
             HashMap::new(),
             5,

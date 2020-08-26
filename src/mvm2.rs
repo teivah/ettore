@@ -17,13 +17,14 @@ pub struct Mvm2 {
 
 impl VirtualMachine for Mvm2 {
     fn run(&mut self, application: &Application) -> Result<f32, String> {
-        while self.ctx.pc / 4 < application.instructions.len() as i32 {
+        while &self.ctx.pc / 4 < application.instructions.len() as i32 {
             let idx = self.fetch_instruction();
             let runner = self.decode(application, idx);
             let execution = self.execute(application, runner)?;
-            self.ctx.pc = execution.0;
-            if write_back(execution.1) {
-                self.write();
+            self.ctx.pc = execution.0.pc;
+            if write_back(&execution.1) {
+                self.ctx.write(&execution.0);
+                self.cycles += CYCLES_REGISTER_ACCESS;
             }
         }
         return Ok(self.cycles);
@@ -72,14 +73,10 @@ impl Mvm2 {
         &mut self,
         application: &Application,
         runner: &Box<dyn InstructionRunner>,
-    ) -> Result<(i32, InstructionType), String> {
-        let pc = runner.run(&mut self.ctx, &application.labels)?;
+    ) -> Result<(Execution, InstructionType), String> {
+        let execution = runner.run(&mut self.ctx, &application.labels)?;
         self.cycles += cycles_per_instruction(runner.instruction_type());
-        Ok((pc, runner.instruction_type()))
-    }
-
-    fn write(&mut self) {
-        self.cycles += CYCLES_REGISTER_ACCESS;
+        Ok((execution, runner.instruction_type()))
     }
 }
 

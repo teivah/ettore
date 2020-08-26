@@ -1,5 +1,5 @@
-    # Init by storing 1109 to memory
-    addi t0, zero, 1109
+    # Init by storing 2 to memory
+    addi t0, zero, 1
     sw t0, 0, zero
 
     addi t0, zero, 0 # Address of the word

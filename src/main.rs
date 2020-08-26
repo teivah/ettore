@@ -4,6 +4,8 @@ use crate::opcodes::Application;
 #[macro_use]
 extern crate queues;
 
+use log::info;
+
 mod bit;
 mod mvm1;
 mod mvm2;
@@ -37,7 +39,7 @@ mod testdads {
     fn stats(test: &str, cycles: f32) {
         let s = cycles / I5_7360U as f32;
         let ns = s * SECOND_TO_NANOSECOND as f32;
-        println!("{}: {} cycles, {:.2} nanoseconds", test, cycles, ns);
+        info!("{}: {} cycles, {:.2} nanoseconds", test, cycles, ns);
     }
 
     #[test]
