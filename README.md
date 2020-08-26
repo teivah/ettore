@@ -82,6 +82,15 @@ The Branch Unit takes the hypothesis that a condition branch will **not** be tak
 
 Of course, pipeline flushing has an immediate performance impact. Modern CPUs have a branch prediction mechanism that is move evolved than MVM-3.
 
+There is another problem with pipelining. We might face what we call a data hazard. For example:
+```
+addi t1, zero, 2
+div t1, t0, t1
+``` 
+
+The processor must wait for `ADDI` to be executed and to get its result written in T1 before to execute `DIV` (as div depends on T1).
+In this case, we implement what we call pipeline interclock by delaying the execution of `DIV`. 
+
 ```
 +-----+     +-------+
 | L1I <-----+ Fetch +------------+
