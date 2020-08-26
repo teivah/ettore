@@ -120,7 +120,7 @@ In this case, we implement what we call pipeline interclock by delaying the exec
 
 All the benchmarks are executed at a fixed CPU clock frequency: 2.3 GHz.
 
-Meanwhile, we have executed a benchmark on an Intel i5-7360U (same CPU clock frequency). This benchmark was on a different architecture, different ISA, etc. is hardly comparable with the MVM benchmarks. Yet, it gives us a vague reference to show how good (or bad :) the MVM are.
+Meanwhile, we have executed a benchmark on an Intel i5-7360U (same CPU clock frequency). This benchmark was on a different architecture, different ISA, etc. is hardly comparable with the MVM benchmarks. Yet, it gives us a vague reference to show how good (or bad :) the MVM implementations are.
 
 ### Is Prime Number
 
