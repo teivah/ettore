@@ -1,3 +1,5 @@
+⚠️ This project is no longer maintained. Instead, I made an enriched version in Go: [teivah/majorana](https://github.com/teivah/majorana).
+
 # Majorana
 
 [Majorana](https://en.wikipedia.org/wiki/Ettore_Majorana) is a RISC-V virtual machine, written in Rust.
